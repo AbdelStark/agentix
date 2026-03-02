@@ -142,6 +142,7 @@ export function QualityPipeline({
             output={outputs.research}
             agent={agents.researcher}
             retries={retries}
+            skipIf={!!research}
           >
             <ResearchPrompt
               unitId={uid}
@@ -166,6 +167,7 @@ export function QualityPipeline({
             output={outputs.plan}
             agent={agents.planner}
             retries={retries}
+            skipIf={!!plan}
           >
             <PlanPrompt
               unitId={uid}

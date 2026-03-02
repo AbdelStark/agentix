@@ -218,7 +218,17 @@ export function AgenticMergeQueue({
   const readyTickets = tickets.filter((t) => t.reportComplete && !t.landed);
 
   if (readyTickets.length === 0) {
-    return null;
+    return (
+      <Task id={nodeId} output={output}>
+        {{
+          ticketsLanded: [],
+          ticketsEvicted: [],
+          ticketsSkipped: [],
+          summary: "No tickets ready for merge queue this iteration.",
+          nextActions: null,
+        }}
+      </Task>
+    );
   }
 
   const prompt = buildMergeQueuePrompt(
