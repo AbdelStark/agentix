@@ -15,8 +15,9 @@ export function renderScheduledWorkflow(params: {
   planPath: string;
   detectedAgents: { claude: boolean; codex: boolean; gh: boolean };
   maxConcurrency: number;
+  baseBranch: string;
 }): string {
-  const { repoRoot, dbPath, planPath, detectedAgents, maxConcurrency } =
+  const { repoRoot, dbPath, planPath, detectedAgents, maxConcurrency, baseBranch } =
     params;
 
   // Determine import prefix — where to import library components from
@@ -48,7 +49,7 @@ const HAS_CLAUDE = ${detectedAgents.claude};
 const HAS_CODEX = ${detectedAgents.codex};
 const MAX_CONCURRENCY = ${maxConcurrency};
 const MAX_PASSES = 3;
-const MAIN_BRANCH = "main";
+const BASE_BRANCH = ${JSON.stringify(baseBranch)};
 
 // ── Load work plan ────────────────────────────────────────────────────
 
@@ -132,7 +133,7 @@ export default smithers((ctx) => (
       repoRoot={REPO_ROOT}
       maxConcurrency={MAX_CONCURRENCY}
       maxPasses={MAX_PASSES}
-      mainBranch={MAIN_BRANCH}
+      mainBranch={BASE_BRANCH}
       agents={agents}
     />
   </Workflow>

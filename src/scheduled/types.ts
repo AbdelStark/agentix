@@ -64,6 +64,8 @@ export const ralphinhoConfigSchema = z.object({
   }),
   /** Max concurrency for parallel work units */
   maxConcurrency: z.number(),
+  /** Branch that units land onto (default: "main") */
+  baseBranch: z.string().default("main"),
   /** When this config was created */
   createdAt: z.string(),
 });

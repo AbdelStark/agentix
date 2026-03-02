@@ -15,7 +15,8 @@ import { join, resolve } from "node:path";
 
 import {
   detectAgents,
-  ensureJjAvailable,
+  detectCurrentBranch,
+  ensureJjColocated,
   getRalphDir,
   ralphSourceRoot,
   scanRepo,
@@ -53,7 +54,7 @@ export async function initScheduledWork(opts: {
   console.log(`  Repo: ${repoRoot}`);
 
   // ── Check prerequisites ─────────────────────────────────────────────
-  await ensureJjAvailable(repoRoot);
+  await ensureJjColocated(repoRoot);
 
   // ── Scan repo ───────────────────────────────────────────────────────
   const repoConfig = await scanRepo(repoRoot);
@@ -100,12 +101,19 @@ export async function initScheduledWork(opts: {
       ? Math.max(1, Number(flags["max-concurrency"]) || 6)
       : 6;
 
+  const baseBranch =
+    typeof flags["base-branch"] === "string"
+      ? flags["base-branch"]
+      : await detectCurrentBranch(repoRoot);
+  console.log(`  Base branch: ${baseBranch}`);
+
   const config: RalphinhoConfig = {
     mode: "scheduled-work",
     repoRoot,
     rfcPath,
     agents,
     maxConcurrency,
+    baseBranch,
     createdAt: new Date().toISOString(),
   };
 
@@ -128,6 +136,7 @@ export async function initScheduledWork(opts: {
     planPath,
     detectedAgents: agents,
     maxConcurrency,
+    baseBranch,
   });
   await writeFile(workflowPath, workflowSource, "utf8");
 

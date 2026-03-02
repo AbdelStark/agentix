@@ -25,7 +25,8 @@ bunx ralphinho run
 ### Prerequisites
 
 - [Bun](https://bun.sh) >= 1.3
-- [jj](https://martinvonz.github.io/jj/) (Jujutsu VCS) — `brew install jj`, then `jj git init --colocate` in your repo
+- [jj](https://martinvonz.github.io/jj/) (Jujutsu VCS) — `brew install jj`
+  - `ralphinho init` automatically runs `jj git init --colocate` if the repo is not yet colocated
 - At least one agent CLI: [`claude`](https://claude.ai/download) and/or [`codex`](https://openai.com/codex)
 
 ## CLI

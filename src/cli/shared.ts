@@ -146,24 +146,57 @@ export async function detectAgents(
   return { claude, codex, gh };
 }
 
-export async function ensureJjAvailable(repoRoot: string) {
-  const ok = await commandExists("jj", repoRoot);
-  if (ok) return;
+export async function detectCurrentBranch(repoRoot: string): Promise<string> {
+  try {
+    const proc = Bun.spawn(["git", "rev-parse", "--abbrev-ref", "HEAD"], {
+      cwd: repoRoot,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    await proc.exited;
+    if (proc.exitCode === 0) {
+      const branch = (await new Response(proc.stdout).text()).trim();
+      if (branch && branch !== "HEAD") return branch;
+    }
+  } catch {
+    // fall through
+  }
+  return "main";
+}
 
-  throw new Error(
-    [
-      "jj is required before ralphinho can run.",
-      "Install jj, then rerun this command.",
-      "",
-      "Install options:",
-      "- macOS: brew install jj",
-      "- Linux (cargo): cargo install --locked jj-cli",
-      "- Verify: jj --version",
-      "",
-      "If this repo is not jj-colocated yet:",
-      "- jj git init --colocate",
-    ].join("\n"),
-  );
+export async function ensureJjColocated(repoRoot: string) {
+  const installed = await commandExists("jj", repoRoot);
+  if (!installed) {
+    throw new Error(
+      [
+        "jj is required before ralphinho can run.",
+        "Install jj, then rerun this command.",
+        "",
+        "Install options:",
+        "- macOS: brew install jj",
+        "- Linux (cargo): cargo install --locked jj-cli",
+        "- Verify: jj --version",
+      ].join("\n"),
+    );
+  }
+
+  // If the repo is already colocated (.jj directory exists), nothing to do.
+  if (existsSync(join(repoRoot, ".jj"))) return;
+
+  // Auto-colocate so jj commands work in the target repo.
+  console.log("  jj not yet colocated — running `jj git init --colocate`...");
+  const proc = Bun.spawn(["jj", "git", "init", "--colocate"], {
+    cwd: repoRoot,
+    stdout: "inherit",
+    stderr: "inherit",
+  });
+  const exitCode = await proc.exited;
+  if (exitCode !== 0) {
+    throw new Error(
+      "Failed to colocate jj. Run `jj git init --colocate` manually in the repo root.",
+    );
+  }
+  console.log("  jj colocated successfully.\n");
 }
 
 // ── Config building ───────────────────────────────────────────────────
