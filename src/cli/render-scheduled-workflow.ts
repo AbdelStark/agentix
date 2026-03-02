@@ -48,7 +48,7 @@ const PLAN_PATH = ${JSON.stringify(planPath)};
 const HAS_CLAUDE = ${detectedAgents.claude};
 const HAS_CODEX = ${detectedAgents.codex};
 const MAX_CONCURRENCY = ${maxConcurrency};
-const MAX_PASSES = 3;
+const MAX_PASSES = 9;
 const BASE_BRANCH = ${JSON.stringify(baseBranch)};
 
 // ── Load work plan ────────────────────────────────────────────────────
