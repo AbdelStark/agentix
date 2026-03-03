@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: bun install --frozen-lockfile
 
+      - name: Verify quality gates
+        run: bun run check
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"

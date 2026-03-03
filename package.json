@@ -46,6 +46,8 @@
   "scripts": {
     "gen:mdx-types": "bun scripts/gen-mdx-types.ts",
     "typecheck": "bun scripts/gen-mdx-types.ts && tsc --noEmit",
+    "test": "bun test",
+    "check": "bun run typecheck && bun test",
     "cli": "bun run src/cli/agentix.ts"
   },
   "peerDependencies": {

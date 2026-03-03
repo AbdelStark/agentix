@@ -43,6 +43,27 @@ export type ScheduledWorkflowProps = {
 
 type UnitState = "done" | "not-ready" | "active";
 
+type MergeQueueLandedEntry = {
+  ticketId: string;
+  mergeCommit: string | null;
+  summary: string;
+};
+
+type MergeQueueEvictedEntry = {
+  ticketId: string;
+  reason: string;
+  details: string;
+};
+
+type MergeQueueRow = {
+  nodeId?: string;
+  ticketsLanded: MergeQueueLandedEntry[];
+  ticketsEvicted: MergeQueueEvictedEntry[];
+  ticketsSkipped: Array<{ ticketId: string; reason: string }>;
+  summary: string;
+  nextActions?: string | null;
+};
+
 // ── Tier Completion ─────────────────────────────────────────────────
 
 function tierComplete(
@@ -111,51 +132,53 @@ export function ScheduledWorkflow({
 }: ScheduledWorkflowProps) {
   const units = workPlan.units;
 
+  const getMergeQueueRows = (): MergeQueueRow[] => {
+    const rows = ctx.outputs("merge_queue");
+    if (!Array.isArray(rows)) return [];
+    return rows.filter((row): row is MergeQueueRow => {
+      return typeof row === "object" && row !== null;
+    });
+  };
+
+  const getMergeQueueNodeRows = (): MergeQueueRow[] => {
+    return getMergeQueueRows().filter((row) => row.nodeId === "merge-queue");
+  };
+
   // ── Landing status ──────────────────────────────────────────────
   // Land status is read from merge queue outputs (single merge queue node).
 
   const unitLanded = (unitId: string): boolean => {
     const mq = ctx.latest("merge_queue", "merge-queue");
     if (!mq) return false;
-    return mq?.ticketsLanded?.some((t: any) => t.ticketId === unitId) ?? false;
+    return mq.ticketsLanded?.some((entry) => entry.ticketId === unitId) ?? false;
   };
 
   // Check ALL merge queue outputs across iterations for landed status.
   // ctx.outputs(table) returns all rows; we filter by nodeId manually.
   const unitLandedAcrossIterations = (unitId: string): boolean => {
-    const allOutputs = ctx.outputs("merge_queue");
-    if (!allOutputs || !Array.isArray(allOutputs)) return unitLanded(unitId);
-    return allOutputs
-      .filter((row: any) => row?.nodeId === "merge-queue")
-      .some(
-        (mq: any) => mq?.ticketsLanded?.some((t: any) => t.ticketId === unitId) ?? false,
-      );
+    const nodeRows = getMergeQueueNodeRows();
+    if (nodeRows.length === 0) return unitLanded(unitId);
+    return nodeRows.some(
+      (mq) => mq.ticketsLanded?.some((entry) => entry.ticketId === unitId) ?? false,
+    );
   };
 
   // Scan ALL merge queue outputs (not just ctx.latest) so that empty static
   // outputs from iterations with no tickets don't mask prior evictions.
   const unitEvicted = (unitId: string): boolean => {
     if (unitLandedAcrossIterations(unitId)) return false;
-    const allOutputs = ctx.outputs("merge_queue");
-    if (!allOutputs || !Array.isArray(allOutputs)) return false;
-    return allOutputs
-      .filter((row: any) => row?.nodeId === "merge-queue")
-      .some(
-        (mq: any) => mq?.ticketsEvicted?.some((t: any) => t.ticketId === unitId) ?? false,
-      );
+    return getMergeQueueNodeRows().some(
+      (mq) => mq.ticketsEvicted?.some((entry) => entry.ticketId === unitId) ?? false,
+    );
   };
 
   const getEvictionContext = (unitId: string): string | null => {
     if (unitLandedAcrossIterations(unitId)) return null;
-    const allOutputs = ctx.outputs("merge_queue");
-    if (!allOutputs || !Array.isArray(allOutputs)) return null;
     // Scan in reverse (most recent first) to get the latest eviction context
-    const relevant = [...allOutputs]
-      .filter((row: any) => row?.nodeId === "merge-queue")
-      .reverse();
+    const relevant = [...getMergeQueueNodeRows()].reverse();
     for (const mq of relevant) {
-      const entry = (mq?.ticketsEvicted as any[])?.find((t: any) => t.ticketId === unitId);
-      if (entry) return entry?.details ?? null;
+      const entry = mq.ticketsEvicted?.find((evicted) => evicted.ticketId === unitId);
+      if (entry) return entry.details ?? null;
     }
     return null;
   };

@@ -29,6 +29,8 @@ Agentix is an opinionated agentic workflow orchestrator for production-grade sof
 |---|---|---|
 | Install deps | `bun install` | After dependency or lockfile changes |
 | Typecheck | `bun run typecheck` | Includes MDX types generation |
+| Test | `bun test` | Runs unit tests |
+| Full local gate | `bun run check` | Typecheck + tests |
 | CLI help | `bun run cli --help` | Uses package script |
 | Initialize workflow | `bun run cli init ./path/to/rfc.md` | Generates `.agentix` artifacts |
 | Regenerate plan | `bun run cli plan` | Recomputes work plan from config RFC |
@@ -73,7 +75,7 @@ Agentix is an opinionated agentic workflow orchestrator for production-grade sof
 1. Update/decompose RFC into units with DDD + BDD fields.
 2. Ensure each unit has explicit invariants and Gherkin scenarios.
 3. Implement prompt/schema updates if contract changes.
-4. Run `bun run typecheck`.
+4. Run `bun run check`.
 5. Update docs (`README.md`, `docs/*`) for behavior changes.
 6. Review diff for slop risks (placeholder logic, weak tests, hidden failures).
 7. Commit and push.
@@ -84,7 +86,8 @@ Agentix is an opinionated agentic workflow orchestrator for production-grade sof
 2. Propagate fields through `src/components/QualityPipeline.tsx`.
 3. Update affected `src/prompts/*.mdx` files.
 4. Run `bun run typecheck` to regenerate `src/mdx.d.ts`.
-5. Validate README/docs consistency.
+5. Run `bun test`.
+6. Validate README/docs consistency.
 </schema_or_prompt_change>
 </workflows>
 
@@ -106,7 +109,7 @@ Agentix is an opinionated agentic workflow orchestrator for production-grade sof
 Before destructive or high-impact edits:
 1. State intent and blast radius.
 2. Stage minimally.
-3. Verify with `bun run typecheck`.
+3. Verify with `bun run check`.
 </safety_checks>
 </boundaries>
 
@@ -116,13 +119,14 @@ Before destructive or high-impact edits:
 |---|---|---|
 | Missing MDX prop type errors | `src/mdx.d.ts` stale | Run `bun run typecheck` |
 | Workflow cannot resume | Missing/invalid `.agentix/workflow.db` | Re-run init/run or inspect `.agentix` state |
+| Tests missing from quality pass | Check command not run | Run `bun run check` before commit |
 | Agent commands fail | Required CLI missing (`claude`/`codex`/`jj`) | Install tools and retry |
 </known_issues>
 
 <recovery_patterns>
 1. Re-read exact error and referenced file.
 2. Confirm schema/prompt field parity.
-3. Run `bun install` then `bun run typecheck`.
+3. Run `bun install` then `bun run check`.
 4. Check git diff for partial refactors.
 5. If blocked, isolate minimal failing unit and patch there first.
 </recovery_patterns>

@@ -6,5 +6,5 @@ dist/
 *.db-shm
 *.db-wal
 .agentix/
-.super-ralph/
 .smithers/executions/
+coverage/

@@ -54,6 +54,8 @@ A unit is merge-eligible only if:
 4. `uncoveredScenarios` is empty
 5. Review severities are acceptable
 6. Domain invariants remain true
+7. Local quality gate `bun run check` passes
+8. CI quality gate (typecheck + tests) is green
 </gates>
 
 <escalation>

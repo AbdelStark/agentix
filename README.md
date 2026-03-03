@@ -44,6 +44,19 @@ bunx agentix run
   - `agentix init` automatically runs `jj git init --colocate` if the repo is not yet colocated
 - At least one agent CLI: [`claude`](https://claude.ai/download) and/or [`codex`](https://openai.com/codex)
 
+### Development Quality Gates
+
+```bash
+# local install
+bun install
+
+# required checks before commit/PR
+bun run typecheck
+bun test
+# or both in one command:
+bun run check
+```
+
 ## CLI
 
 ```
@@ -216,6 +229,13 @@ export default smithers((ctx) => (
 
 Speed is valuable, but only when correctness, testability, and maintainability also improve.
 
+## Contributor Docs
+
+- [CONTRIBUTING.md](CONTRIBUTING.md)
+- [Production Readiness Checklist](docs/production-readiness-checklist.md)
+- [Agentix Excellence Thesis](docs/agentic-excellence-thesis.md)
+- [Agentix Excellence Roadmap](docs/agentic-excellence-roadmap.md)
+
 ## References
 
 - Cucumber docs: https://cucumber.io/docs/
@@ -266,7 +286,8 @@ src/
     └── decompose.ts             # AI RFC decomposition
 docs/
 ├── agentic-excellence-thesis.md
-└── agentic-excellence-roadmap.md
+├── agentic-excellence-roadmap.md
+└── production-readiness-checklist.md
 .codex/skills/
 ├── _index.md
 ├── ddd-context-mapping/SKILL.md

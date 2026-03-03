@@ -1,6 +1,6 @@
 import React from "react";
 import { Task } from "smithers-orchestrator";
-import type { SmithersCtx } from "smithers-orchestrator";
+import type { AgentLike } from "smithers-orchestrator";
 import { z } from "zod";
 
 export const mergeQueueResultSchema = z.object({
@@ -37,16 +37,16 @@ export type AgenticMergeQueueTicket = {
 };
 
 export type AgenticMergeQueueProps = {
-  ctx: SmithersCtx<any>;
-  outputs: any;
+  ctx?: unknown;
+  outputs?: unknown;
   tickets: AgenticMergeQueueTicket[];
-  agent: any;
+  agent: AgentLike | AgentLike[];
   postLandChecks: string[];
   preLandChecks: string[];
   repoRoot: string;
   mainBranch?: string;
   maxSpeculativeDepth?: number;
-  output: any;
+  output: z.ZodObject<any>;
   /** Override the Task node ID (default: "agentic-merge-queue") */
   nodeId?: string;
   /** Branch prefix for unit branches (default: "ticket/") */
