@@ -218,4 +218,109 @@ describe("scheduledOutputSchemas.test", () => {
     expect(parsed.warningCount).toBe(1);
     expect(parsed.effectiveClasses).toHaveLength(3);
   });
+
+  test("accepts merge queue output with deterministic risk snapshot", () => {
+    const parsed = scheduledOutputSchemas.merge_queue.parse({
+      riskSnapshot: {
+        scoringVersion: "merge-risk-v1",
+        recommendedOrder: [
+          {
+            rank: 1,
+            ticketId: "unit-a",
+            priority: "medium",
+            riskScore: 22,
+            riskBand: "low",
+            mergeStrategy: "speculative",
+            speculativeBatch: "batch-1",
+          },
+          {
+            rank: 2,
+            ticketId: "unit-b",
+            priority: "medium",
+            riskScore: 79,
+            riskBand: "high",
+            mergeStrategy: "sequential",
+            speculativeBatch: null,
+          },
+        ],
+        riskTable: [
+          {
+            ticketId: "unit-a",
+            priority: "medium",
+            ticketCategory: "small",
+            overlapCount: 0,
+            churnScore: 0,
+            historicalEvictions: 0,
+            dependencyProximity: 0,
+            contributions: {
+              baseRisk: 5,
+              tierComplexity: 10,
+              overlap: 0,
+              churn: 0,
+              historicalEvictions: 0,
+              dependencyProximity: 0,
+            },
+            riskScore: 15,
+            riskBand: "low",
+            mergeStrategy: "speculative",
+          },
+          {
+            ticketId: "unit-b",
+            priority: "medium",
+            ticketCategory: "large",
+            overlapCount: 2,
+            churnScore: 2,
+            historicalEvictions: 1,
+            dependencyProximity: 1,
+            contributions: {
+              baseRisk: 5,
+              tierComplexity: 26,
+              overlap: 28,
+              churn: 8,
+              historicalEvictions: 12,
+              dependencyProximity: 7,
+            },
+            riskScore: 86,
+            riskBand: "high",
+            mergeStrategy: "sequential",
+          },
+        ],
+        speculativeBatches: [["unit-a"]],
+        sequentialTickets: ["unit-b"],
+      },
+      ticketsLanded: [
+        {
+          ticketId: "unit-a",
+          mergeCommit: "abc123",
+          summary: "Landed cleanly",
+        },
+      ],
+      ticketsEvicted: [
+        {
+          ticketId: "unit-b",
+          reason: "merge-conflict",
+          details: "conflicted on src/shared.ts",
+        },
+      ],
+      ticketsSkipped: [],
+      summary: "1 landed, 1 evicted",
+      nextActions: "Resolve unit-b conflict and retry",
+    });
+
+    expect(parsed.riskSnapshot.scoringVersion).toBe("merge-risk-v1");
+    expect(parsed.riskSnapshot.recommendedOrder[0]?.ticketId).toBe("unit-a");
+    expect(parsed.riskSnapshot.sequentialTickets).toEqual(["unit-b"]);
+  });
+
+  test("rejects merge queue output when risk snapshot is missing", () => {
+    expect(() =>
+      scheduledOutputSchemas.merge_queue.parse({
+        ticketsLanded: [],
+        ticketsEvicted: [],
+        ticketsSkipped: [],
+        summary: "none",
+        nextActions: null,
+      }),
+    ).toThrow();
+  });
 });

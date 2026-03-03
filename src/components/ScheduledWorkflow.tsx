@@ -19,7 +19,11 @@ import { Ralph, Sequence, Parallel, Task } from "smithers-orchestrator";
 import type { SmithersCtx, AgentLike } from "smithers-orchestrator";
 import type { WorkUnit, WorkPlan } from "../scheduled/types";
 import { QualityPipeline, type DepSummary, type QualityPipelineAgents, type ScheduledOutputs } from "./QualityPipeline";
-import { AgenticMergeQueue, type AgenticMergeQueueTicket } from "./AgenticMergeQueue";
+import {
+  AgenticMergeQueue,
+  type AgenticMergeQueueTicket,
+  type MergeQueueRiskSnapshot,
+} from "./AgenticMergeQueue";
 import {
   evaluateTraceMatrix,
   writeTraceMatrixArtifact,
@@ -58,7 +62,7 @@ type UnitState = "done" | "not-ready" | "active";
 
 type MergeQueueLandedEntry = {
   ticketId: string;
-  mergeCommit: string | null;
+  mergeCommit?: string | null;
   summary: string;
 };
 
@@ -70,6 +74,7 @@ type MergeQueueEvictedEntry = {
 
 type MergeQueueRow = {
   nodeId?: string;
+  riskSnapshot?: MergeQueueRiskSnapshot;
   ticketsLanded: MergeQueueLandedEntry[];
   ticketsEvicted: MergeQueueEvictedEntry[];
   ticketsSkipped: Array<{ ticketId: string; reason: string }>;
@@ -349,9 +354,9 @@ export function ScheduledWorkflow({
   const getMergeQueueRows = (): MergeQueueRow[] => {
     const rows = ctx.outputs("merge_queue");
     if (!Array.isArray(rows)) return [];
-    return rows.filter((row): row is MergeQueueRow => {
-      return typeof row === "object" && row !== null;
-    });
+    return rows
+      .filter((row) => typeof row === "object" && row !== null)
+      .map((row) => row as unknown as MergeQueueRow);
   };
 
   const getMergeQueueNodeRows = (): MergeQueueRow[] => {
@@ -395,6 +400,31 @@ export function ScheduledWorkflow({
       if (entry) return entry.details ?? null;
     }
     return null;
+  };
+
+  const getEvictionCount = (unitId: string): number => {
+    return getMergeQueueNodeRows().reduce((count, mq) => {
+      const evictions = mq.ticketsEvicted ?? [];
+      const unitEvictions = evictions.filter((entry) => entry.ticketId === unitId).length;
+      return count + unitEvictions;
+    }, 0);
+  };
+
+  const getRecentlyLandedUnitIds = (limit: number = 20): string[] => {
+    const rows = [...getMergeQueueNodeRows()].reverse();
+    const seen = new Set<string>();
+    const ordered: string[] = [];
+
+    for (const row of rows) {
+      for (const landed of row.ticketsLanded ?? []) {
+        if (!landed.ticketId || seen.has(landed.ticketId)) continue;
+        seen.add(landed.ticketId);
+        ordered.push(landed.ticketId);
+        if (ordered.length >= limit) return ordered;
+      }
+    }
+
+    return ordered;
   };
 
   // ── Unit state derivation ───────────────────────────────────────
@@ -442,6 +472,7 @@ export function ScheduledWorkflow({
 
   function buildMergeTickets(): AgenticMergeQueueTicket[] {
     const tickets: AgenticMergeQueueTicket[] = [];
+    const recentlyLanded = new Set(getRecentlyLandedUnitIds(20));
 
     for (const unit of units) {
       if (unitLandedAcrossIterations(unit.id)) continue;
@@ -502,6 +533,8 @@ export function ScheduledWorkflow({
         filesModified,
         filesCreated,
         worktreePath: `/tmp/workflow-wt-${unit.id}`,
+        historicalEvictions: getEvictionCount(unit.id),
+        dependencyProximity: (unit.deps ?? []).filter((depId) => recentlyLanded.has(depId)).length,
       });
     }
 

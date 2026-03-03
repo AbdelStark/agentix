@@ -35,6 +35,51 @@ const assertionSignalsSchema = z.object({
   weakTestsDetected: z.boolean(),
 });
 
+const mergeQueuePrioritySchema = z.enum(["critical", "high", "medium", "low"]);
+const mergeRiskBandSchema = z.enum(["low", "medium", "high"]);
+const mergeStrategySchema = z.enum(["speculative", "sequential"]);
+
+const mergeRiskContributionsSchema = z.object({
+  baseRisk: z.number().int().nonnegative(),
+  tierComplexity: z.number().int().nonnegative(),
+  overlap: z.number().int().nonnegative(),
+  churn: z.number().int().nonnegative(),
+  historicalEvictions: z.number().int().nonnegative(),
+  dependencyProximity: z.number().int().nonnegative(),
+});
+
+const mergeQueueRiskTableEntrySchema = z.object({
+  ticketId: z.string(),
+  priority: mergeQueuePrioritySchema,
+  ticketCategory: z.string(),
+  overlapCount: z.number().int().nonnegative(),
+  churnScore: z.number().int().nonnegative(),
+  historicalEvictions: z.number().int().nonnegative(),
+  dependencyProximity: z.number().int().nonnegative(),
+  contributions: mergeRiskContributionsSchema,
+  riskScore: z.number().int().min(0).max(100),
+  riskBand: mergeRiskBandSchema,
+  mergeStrategy: mergeStrategySchema,
+});
+
+const mergeQueueRiskOrderEntrySchema = z.object({
+  rank: z.number().int().positive(),
+  ticketId: z.string(),
+  priority: mergeQueuePrioritySchema,
+  riskScore: z.number().int().min(0).max(100),
+  riskBand: mergeRiskBandSchema,
+  mergeStrategy: mergeStrategySchema,
+  speculativeBatch: z.string().nullable(),
+});
+
+const mergeQueueRiskSnapshotSchema = z.object({
+  scoringVersion: z.string(),
+  recommendedOrder: z.array(mergeQueueRiskOrderEntrySchema),
+  riskTable: z.array(mergeQueueRiskTableEntrySchema),
+  speculativeBatches: z.array(z.array(z.string())),
+  sequentialTickets: z.array(z.string()),
+});
+
 export const scheduledOutputSchemas = {
   // ── Research ──────────────────────────────────────────────────────
   research: z.object({
@@ -194,6 +239,7 @@ export const scheduledOutputSchemas = {
   // Land status is read directly from this output.
   // unitLanded()/unitEvicted() scan ticketsLanded/ticketsEvicted.
   merge_queue: z.object({
+    riskSnapshot: mergeQueueRiskSnapshotSchema,
     ticketsLanded: z.array(z.object({
       ticketId: z.string(),
       mergeCommit: z.string().nullable(),

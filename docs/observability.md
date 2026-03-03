@@ -29,6 +29,29 @@ Fields:
 - `runId`: optional workflow run ID
 - `details`: additional metadata for troubleshooting
 
+## Merge Queue Risk Taxonomy
+
+Merge queue outputs now include deterministic risk metadata in `merge_queue.risk_snapshot`:
+
+- `scoringVersion`: stable risk model version (`merge-risk-v1`)
+- `riskTable[]`:
+  - `ticketId`
+  - `overlapCount`
+  - `churnScore`
+  - `historicalEvictions`
+  - `dependencyProximity`
+  - `riskScore` (0-100)
+  - `riskBand` (`low`, `medium`, `high`)
+  - `mergeStrategy` (`speculative`, `sequential`)
+- `recommendedOrder[]`: deterministic sorted order with rank and batch assignment
+- `speculativeBatches[][]`: speculative batch boundaries
+- `sequentialTickets[]`: tickets forced into sequential strategy
+
+This snapshot is emitted every merge-queue iteration and should be used for:
+- eviction-rate analysis by risk band
+- first-pass land-rate tracking by strategy
+- drift detection when tuning risk weights/thresholds
+
 ## Operational Usage
 
 - Tail events during execution:
