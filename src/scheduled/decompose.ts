@@ -6,7 +6,14 @@
  */
 
 import type { RepoConfig } from "../cli/shared";
-import { workPlanSchema, type WorkPlan, type WorkUnit, validateDAG, computeLayers } from "./types";
+import {
+  workPlanSchema,
+  workUnitSchema,
+  type WorkPlan,
+  type WorkUnit,
+  validateDAG,
+  computeLayers,
+} from "./types";
 
 const DECOMPOSE_SYSTEM_PROMPT = `You are a senior software architect decomposing an RFC/PRD into executable work units for an automated AI development pipeline.
 
@@ -109,6 +116,114 @@ Decompose this RFC into work units. Prefer fewer cohesive units over many granul
 Return ONLY the JSON object.`;
 }
 
+type DecomposePayload = {
+  units: WorkUnit[];
+};
+
+function normalizeUnitsPayload(parsed: unknown): unknown {
+  if (Array.isArray(parsed)) return parsed;
+  if (!parsed || typeof parsed !== "object") return null;
+
+  const record = parsed as Record<string, unknown>;
+  if (Array.isArray(record.units)) return record.units;
+
+  const candidates = ["plan", "workPlan", "result", "data"];
+  for (const key of candidates) {
+    const nested = record[key];
+    if (nested && typeof nested === "object") {
+      const nestedUnits = (nested as Record<string, unknown>).units;
+      if (Array.isArray(nestedUnits)) return nestedUnits;
+    }
+  }
+
+  return null;
+}
+
+export function extractJsonPayload(rawResult: string): string {
+  const fenceMatch = rawResult.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
+  if (fenceMatch) return fenceMatch[1].trim();
+
+  const trimmed = rawResult.trim();
+  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return trimmed;
+
+  const balanced = extractBalancedJson(trimmed);
+  return (balanced ?? trimmed).trim();
+}
+
+function extractBalancedJson(input: string): string | null {
+  const objStart = input.indexOf("{");
+  const arrStart = input.indexOf("[");
+  const starts = [objStart, arrStart].filter((idx) => idx >= 0);
+  if (starts.length === 0) return null;
+
+  const start = Math.min(...starts);
+  const stack: string[] = [];
+  let inString = false;
+  let escaped = false;
+
+  for (let i = start; i < input.length; i += 1) {
+    const ch = input[i];
+
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (ch === "\"") inString = false;
+      continue;
+    }
+
+    if (ch === "\"") {
+      inString = true;
+      continue;
+    }
+
+    if (ch === "{") {
+      stack.push("}");
+      continue;
+    }
+    if (ch === "[") {
+      stack.push("]");
+      continue;
+    }
+    if ((ch === "}" || ch === "]") && stack[stack.length - 1] === ch) {
+      stack.pop();
+      if (stack.length === 0) {
+        return input.slice(start, i + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
+export function parseDecomposeResponse(rawResult: string): DecomposePayload {
+  const jsonStr = extractJsonPayload(rawResult);
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(jsonStr);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown parse error";
+    throw new Error(
+      `Failed to parse AI response as JSON: ${message}\n\nRaw response:\n${rawResult.slice(0, 500)}`,
+    );
+  }
+
+  const unitsPayload = normalizeUnitsPayload(parsed);
+  if (!Array.isArray(unitsPayload) || unitsPayload.length === 0) {
+    throw new Error(
+      "AI returned no work units. Expected `units` array in top-level object, nested plan, or direct array.",
+    );
+  }
+
+  const units = workUnitSchema.array().parse(unitsPayload);
+  return { units };
+}
+
 /**
  * Decompose an RFC into work units using the Anthropic API.
  */
@@ -133,26 +248,7 @@ export async function decomposeRFC(
     clearInterval(spinInterval);
     process.stdout.write("\r\x1b[K");
   }
-
-  // Parse the JSON response
-  let jsonStr = rawResult;
-  const fenceMatch = jsonStr.match(/```(?:json)?\s*\n?([\s\S]*?)\n?```/);
-  if (fenceMatch) jsonStr = fenceMatch[1];
-
-  let parsed: any;
-  try {
-    parsed = JSON.parse(jsonStr.trim());
-  } catch (e: any) {
-    throw new Error(
-      `Failed to parse AI response as JSON: ${e.message}\n\nRaw response:\n${rawResult.slice(0, 500)}`,
-    );
-  }
-
-  // Validate units
-  const units: WorkUnit[] = parsed.units;
-  if (!Array.isArray(units) || units.length === 0) {
-    throw new Error("AI returned no work units");
-  }
+  const { units } = parseDecomposeResponse(rawResult);
 
   // Validate DAG
   const dagResult = validateDAG(units);
