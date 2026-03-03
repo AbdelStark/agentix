@@ -149,6 +149,11 @@ export function QualityPipeline({
               unitName={unit.name}
               unitDescription={unit.description}
               unitCategory={tier}
+              boundedContext={unit.boundedContext}
+              ubiquitousLanguage={unit.ubiquitousLanguage}
+              domainInvariants={unit.domainInvariants}
+              gherkinFeature={unit.gherkinFeature}
+              gherkinScenarios={unit.gherkinScenarios}
               evictionContext={evictionContext}
               rfcSource={workPlan.source}
               rfcSections={unit.rfcSections}
@@ -174,6 +179,11 @@ export function QualityPipeline({
               unitName={unit.name}
               unitDescription={unit.description}
               unitCategory={tier}
+              boundedContext={unit.boundedContext}
+              ubiquitousLanguage={unit.ubiquitousLanguage}
+              domainInvariants={unit.domainInvariants}
+              gherkinFeature={unit.gherkinFeature}
+              gherkinScenarios={unit.gherkinScenarios}
               acceptanceCriteria={unit.acceptance}
               contextFilePath={research?.contextFilePath ?? `docs/research/${uid}.md`}
               researchSummary={research?.findings?.join?.("\n") ?? null}
@@ -196,6 +206,11 @@ export function QualityPipeline({
             unitId={uid}
             unitName={unit.name}
             unitCategory={tier}
+            boundedContext={unit.boundedContext}
+            ubiquitousLanguage={unit.ubiquitousLanguage}
+            domainInvariants={unit.domainInvariants}
+            gherkinFeature={unit.gherkinFeature}
+            gherkinScenarios={unit.gherkinScenarios}
             planFilePath={plan?.planFilePath ?? `docs/plans/${uid}.md`}
             contextFilePath={research?.contextFilePath ?? `docs/research/${uid}.md`}
             implementationSteps={plan?.implementationSteps ?? []}
@@ -226,6 +241,9 @@ export function QualityPipeline({
             unitId={uid}
             unitName={unit.name}
             unitCategory={tier}
+            gherkinFeature={unit.gherkinFeature}
+            gherkinScenarios={unit.gherkinScenarios}
+            domainInvariants={unit.domainInvariants}
             whatWasDone={impl?.whatWasDone ?? "Unknown"}
             filesCreated={impl?.filesCreated ?? []}
             filesModified={impl?.filesModified ?? []}
@@ -249,6 +267,14 @@ export function QualityPipeline({
                 unitName={unit.name}
                 unitCategory={tier}
                 acceptanceCriteria={unit.acceptance}
+                boundedContext={unit.boundedContext}
+                ubiquitousLanguage={unit.ubiquitousLanguage}
+                domainInvariants={unit.domainInvariants}
+                gherkinFeature={unit.gherkinFeature}
+                gherkinScenarios={unit.gherkinScenarios}
+                scenariosTotal={test?.scenariosTotal ?? unit.gherkinScenarios.length}
+                scenariosCovered={test?.scenariosCovered ?? 0}
+                uncoveredScenarios={test?.uncoveredScenarios ?? []}
                 filesCreated={impl?.filesCreated ?? []}
                 filesModified={impl?.filesModified ?? []}
                 testResults={[
@@ -260,6 +286,13 @@ export function QualityPipeline({
                   {
                     name: "Acceptance criteria",
                     items: unit.acceptance,
+                  },
+                  {
+                    name: "BDD executable specification",
+                    items: unit.gherkinScenarios.map(
+                      (scenario) =>
+                        `${scenario.id}: ${scenario.title}`,
+                    ),
                   },
                 ]}
               />
@@ -333,6 +366,10 @@ export function QualityPipeline({
               unitName={unit.name}
               description={unit.description}
               acceptanceCriteria={unit.acceptance}
+              boundedContext={unit.boundedContext}
+              domainInvariants={unit.domainInvariants}
+              gherkinFeature={unit.gherkinFeature}
+              gherkinScenarios={unit.gherkinScenarios}
               pass={pass + 1}
               maxPasses={maxPasses}
               implSummary={impl?.whatWasDone ?? null}
@@ -340,6 +377,10 @@ export function QualityPipeline({
               buildPassed={test?.buildPassed ?? null}
               testsPassCount={test?.testsPassCount ?? 0}
               testsFailCount={test?.testsFailCount ?? 0}
+              scenariosTotal={test?.scenariosTotal ?? unit.gherkinScenarios.length}
+              scenariosCovered={test?.scenariosCovered ?? 0}
+              uncoveredScenarios={test?.uncoveredScenarios ?? []}
+              tddEvidence={test?.tddEvidence ?? null}
               failingSummary={test?.failingSummary ?? null}
               prdSeverity={prdReview?.severity ?? null}
               prdApproved={prdReview?.approved ?? null}

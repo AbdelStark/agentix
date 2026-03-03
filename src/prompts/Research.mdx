@@ -6,6 +6,22 @@ Category: {props.unitCategory}
 
 Your job is to gather all reference materials needed to implement this unit.
 
+## Domain Context (DDD)
+
+Bounded context: {props.boundedContext}
+Ubiquitous language:
+{props.ubiquitousLanguage && props.ubiquitousLanguage.length > 0 ? props.ubiquitousLanguage.map((term, i) => `${i + 1}. ${term}`).join('\n') : '- None provided'}
+
+Domain invariants:
+{props.domainInvariants && props.domainInvariants.length > 0 ? props.domainInvariants.map((inv, i) => `${i + 1}. ${inv}`).join('\n') : '- None provided'}
+
+## Executable Specification (BDD)
+
+Feature: {props.gherkinFeature}
+{props.gherkinScenarios && props.gherkinScenarios.length > 0
+  ? props.gherkinScenarios.map((s, idx) => `### Scenario ${idx + 1}: ${s.title} (${s.id})\nGiven:\n${(s.given || []).map((g) => `- ${g}`).join('\n')}\nWhen:\n${(s.when || []).map((w) => `- ${w}`).join('\n')}\nThen:\n${(s.then || []).map((t) => `- ${t}`).join('\n')}`).join('\n\n')
+  : 'No scenarios provided'}
+
 {props.evictionContext ? `\n## Merge Queue Eviction Context\n\nThis unit was previously evicted from the speculative merge queue.\nUse this context to focus your investigation on the failure/conflict root cause:\n\n${props.evictionContext}\n` : ''}
 
 {props.rfcSource ? `\nRead the full RFC specification: ${props.rfcSource}` : ''}
@@ -20,7 +36,9 @@ Your job is to gather all reference materials needed to implement this unit.
 1. **Read the specs** — Review all relevant specification documents
 2. **Read reference materials** — Browse reference documentation for patterns and examples
 3. **Read existing implementation** — Read any files listed in the ticket's relevantFiles
-4. **Write context file** — Write {props.contextFilePath} with all paths and summaries
+4. **Map domain model** — Identify aggregates, value objects, entities, and boundaries in this bounded context
+5. **Map scenario impact** — For each Gherkin scenario, identify code paths and integration points involved
+6. **Write context file** — Write {props.contextFilePath} with all paths and summaries
 
 {props.referenceFiles && props.referenceFiles.length > 0 ? `\nHinted reference files:\n${props.referenceFiles.map(f => `- ${f}`).join('\n')}` : ''}
 

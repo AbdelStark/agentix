@@ -6,6 +6,21 @@ Category: {props.unitCategory}
 Acceptance Criteria:
 {(Array.isArray(props.acceptanceCriteria) ? props.acceptanceCriteria : []).map((c, i) => `${i + 1}. ${c}`).join('\n')}
 
+## Domain Context (DDD)
+
+Bounded context: {props.boundedContext}
+Ubiquitous language:
+{props.ubiquitousLanguage && props.ubiquitousLanguage.length > 0 ? props.ubiquitousLanguage.map((term, i) => `${i + 1}. ${term}`).join('\n') : '- None provided'}
+Domain invariants:
+{props.domainInvariants && props.domainInvariants.length > 0 ? props.domainInvariants.map((inv, i) => `${i + 1}. ${inv}`).join('\n') : '- None provided'}
+
+## Executable Specification (BDD)
+
+Feature: {props.gherkinFeature}
+{props.gherkinScenarios && props.gherkinScenarios.length > 0
+  ? props.gherkinScenarios.map((s, idx) => `### Scenario ${idx + 1}: ${s.title} (${s.id})\nGiven:\n${(s.given || []).map((g) => `- ${g}`).join('\n')}\nWhen:\n${(s.when || []).map((w) => `- ${w}`).join('\n')}\nThen:\n${(s.then || []).map((t) => `- ${t}`).join('\n')}`).join('\n\n')
+  : 'No scenarios provided'}
+
 ## Research Context
 
 Read the context file first: {props.contextFilePath}
@@ -20,10 +35,12 @@ Create a detailed implementation plan. First, assess whether this work changes o
 1. **Assess the work type** — does this add features, fix bugs, change APIs? Or is it cleanup, refactoring, dead code removal?
 2. **Break down the work** into small, atomic steps
 3. **Identify files** to create and modify
-4. **If TDD applies**: identify tests to write (unit + integration), order tests BEFORE implementation
-5. **If TDD does not apply**: list the changes and the verification steps (typecheck, existing tests)
-6. **Note risks** or potential issues
-7. **Write the plan** to {props.planFilePath}
+4. **Map each Gherkin scenario to tests** (unit/integration/e2e) with scenario IDs in test names or comments
+5. **If TDD applies**: identify tests to write (unit + integration), order tests BEFORE implementation
+6. **Define no-slop constraints**: minimum assertions, forbidden shortcuts, and verification gates
+7. **If TDD does not apply**: list the changes and the verification steps (typecheck, existing tests)
+8. **Note risks** or potential issues
+9. **Write the plan** to {props.planFilePath}
 
 ## Does TDD Apply?
 
@@ -47,8 +64,10 @@ Create a detailed implementation plan. First, assess whether this work changes o
 - Overview of the approach
 - **Whether TDD applies**, with justification
 - Step-by-step changes (TDD: tests before implementation; non-TDD: changes then verification)
+- Scenario-to-test mapping table (`scenarioId -> test files -> commands`)
 - Files to create/modify (with specific function signatures)
 - Tests to write (if TDD) or existing tests that cover the change (if non-TDD)
+- Invariant checks: where each domain invariant is validated
 - Risks and mitigations
 - How to verify against acceptance criteria
 

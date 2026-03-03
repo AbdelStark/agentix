@@ -104,14 +104,14 @@ function chooseAgent(primary: "claude" | "codex" | "opus", role: string) {
 }
 
 const agents = {
-  researcher:    chooseAgent("claude", "Researcher — Gather context from codebase for implementation"),
-  planner:       chooseAgent("opus",   "Planner — Create implementation plan from RFC section and context"),
-  implementer:   chooseAgent("codex",  "Implementer — Write code following the plan"),
-  tester:        chooseAgent("claude", "Tester — Run tests and validate implementation"),
-  prdReviewer:   chooseAgent("claude", "PRD Reviewer — Verify implementation matches RFC specification"),
-  codeReviewer:  chooseAgent("opus",   "Code Reviewer — Check code quality, conventions, security"),
+  researcher:    chooseAgent("claude", "Researcher — Build DDD context map (bounded context, ubiquitous language, invariants)"),
+  planner:       chooseAgent("opus",   "Planner — Convert RFC into BDD/TDD implementation plan with scenario mapping"),
+  implementer:   chooseAgent("codex",  "Implementer — Deliver scenario-driven code via strict RED->GREEN->REFACTOR"),
+  tester:        chooseAgent("claude", "Tester — Validate scenario coverage, invariant safety, and production readiness"),
+  prdReviewer:   chooseAgent("claude", "PRD Reviewer — Verify acceptance criteria, Gherkin scenarios, and spec compliance"),
+  codeReviewer:  chooseAgent("opus",   "Code Reviewer — Enforce production-grade quality, maintainability, and security"),
   reviewFixer:   chooseAgent("codex",  "ReviewFixer — Fix issues found in code review"),
-  finalReviewer: chooseAgent("opus",   "Final Reviewer — Decide if unit is complete"),
+  finalReviewer: chooseAgent("opus",   "Final Reviewer — Gate merge readiness with zero-slop standards"),
   mergeQueue:    chooseAgent("opus",   "MergeQueue Coordinator — Rebase and land unit branches onto main"),
 };
 

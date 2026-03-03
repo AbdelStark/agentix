@@ -1,8 +1,23 @@
 # agentix
 
-> Plan-driven AI development workflow — decompose specs into work units, implement them in parallel with quality gates, and land them onto main.
+> Production-grade agentic workflow orchestrator — DDD + BDD + TDD by default, zero tolerance for slop.
 
-An opinionated [Smithers](https://smithers.sh) workflow. You provide a plan, agentix decomposes it into work units with a dependency DAG, runs each through a tier-based quality pipeline (research → plan → implement → test → review), and lands the results via a conflict-aware merge queue.
+An opinionated [Smithers](https://smithers.sh) workflow. You provide an RFC/PRD, Agentix decomposes it into bounded-context work units, defines executable Gherkin scenarios, runs strict RED→GREEN→REFACTOR delivery loops, and lands results through a conflict-aware merge queue.
+
+## Core Thesis
+
+Agentic coding quality bottlenecks are no longer "typing speed" — they are:
+
+1. Specification quality
+2. Validation quality
+
+Agentix addresses both by hardwiring:
+
+- **DDD** for architecture boundaries (`boundedContext`, ubiquitous language, invariants)
+- **BDD** for executable specifications (`gherkinFeature`, scenario-level Given/When/Then)
+- **TDD** for implementation discipline (no production code without failing tests first)
+
+This is not a prototype-speed tool. It is designed for production-grade systems that must remain maintainable, testable, auditable, and safe at scale.
 
 ## Quick Start
 
@@ -51,10 +66,10 @@ Options:
 
 ### `init`
 
-Reads your RFC, scans the repo for build/test commands, detects available agent CLIs, then uses AI to decompose the RFC into work units with a dependency DAG. Outputs:
+Reads your RFC, scans the repo for build/test commands, detects available agent CLIs, then uses AI to decompose the RFC into work units with a dependency DAG. Each unit includes DDD boundary metadata and BDD executable scenarios.
 
 - `.agentix/config.json` — workflow configuration
-- `.agentix/work-plan.json` — work units, dependencies, tiers, acceptance criteria
+- `.agentix/work-plan.json` — work units, dependencies, tiers, acceptance criteria, bounded contexts, domain invariants, and Gherkin scenarios
 
 You can edit the work plan before running.
 
@@ -94,6 +109,16 @@ Each work unit runs through a tier-based quality pipeline inside an isolated jj 
 
 The tier is assigned during RFC decomposition based on complexity assessment.
 
+### DDD + BDD + TDD Contract
+
+Each work unit now carries:
+
+- `boundedContext` + `ubiquitousLanguage` + `domainInvariants` (DDD)
+- `gherkinFeature` + `gherkinScenarios` (BDD executable spec)
+- test-phase scenario coverage metrics (`scenariosTotal`, `scenariosCovered`, `uncoveredScenarios`) used by merge readiness gates (TDD/BDD enforcement)
+
+Units are blocked from completion when scenario coverage is incomplete.
+
 ### Data Threading
 
 Each stage reads prior outputs and feeds them forward:
@@ -101,8 +126,9 @@ Each stage reads prior outputs and feeds them forward:
 ```
 research.contextFilePath → plan
 plan.implementationSteps → implement
+unit.{boundedContext,domainInvariants,gherkinScenarios} → research, plan, implement, test, final-review
 implement.{filesCreated, filesModified, whatWasDone} → test, reviews
-test.{buildPassed, failingSummary} → reviews, implement (next pass)
+test.{buildPassed, failingSummary, scenariosCovered, uncoveredScenarios} → reviews, implement (next pass), final-review
 reviews.{feedback, issues} → review-fix → implement (next pass)
 final-review.reasoning → implement (next pass)
 evictionContext → implement (after merge conflict)
@@ -179,6 +205,24 @@ export default smithers((ctx) => (
 | `AgenticMergeQueue` | Lands completed units onto main, evicts on conflict |
 | `Monitor` | TUI for observing workflow progress |
 
+## Philosophy
+
+`NEVER PRODUCE SLOP` is a hard rule:
+
+- no fake-green tests
+- no placeholder implementations
+- no merge with uncovered executable scenarios
+- no "ship now, clean later" shortcuts
+
+Speed is valuable, but only when correctness, testability, and maintainability also improve.
+
+## References
+
+- Cucumber docs: https://cucumber.io/docs/
+- Gherkin reference: https://cucumber.io/docs/gherkin/reference
+- BDD intro: https://cucumber.io/docs/bdd/
+- Software 3.0 context (discussion): https://medium.com/@ben_pouladian/andrej-karpathy-on-software-3-0-software-in-the-age-of-ai-b25533da93b6
+
 ### Agent Configuration
 
 Agents are role-based. Each role accepts a single agent or an array for fallback (Smithers v0.8+):
@@ -220,6 +264,15 @@ src/
     ├── types.ts                 # WorkPlan, WorkUnit, SCHEDULED_TIERS, computeLayers
     ├── schemas.ts               # Zod output schemas (12 tables)
     └── decompose.ts             # AI RFC decomposition
+docs/
+├── agentic-excellence-thesis.md
+└── agentic-excellence-roadmap.md
+.codex/skills/
+├── _index.md
+├── ddd-context-mapping/SKILL.md
+├── bdd-gherkin-design/SKILL.md
+├── tdd-red-green-refactor/SKILL.md
+└── production-readiness-gates/SKILL.md
 ```
 
 ## License

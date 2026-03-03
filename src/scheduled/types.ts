@@ -9,6 +9,19 @@ import { z } from "zod";
 
 // ── Work Unit ─────────────────────────────────────────────────────────
 
+const gherkinScenarioSchema = z.object({
+  /** Stable scenario identifier scoped to the unit */
+  id: z.string(),
+  /** Human-readable scenario title */
+  title: z.string(),
+  /** Given clauses (initial context) */
+  given: z.array(z.string()).min(1),
+  /** When clauses (trigger/action) */
+  when: z.array(z.string()).min(1),
+  /** Then clauses (observable outcomes) */
+  then: z.array(z.string()).min(1),
+});
+
 export const workUnitSchema = z.object({
   /** Unique identifier (kebab-case, e.g. "metadata-cleanup") */
   id: z.string(),
@@ -22,6 +35,18 @@ export const workUnitSchema = z.object({
   deps: z.array(z.string()),
   /** Concrete acceptance criteria — what must be true when this unit is done */
   acceptance: z.array(z.string()),
+  /** Bounded context for this unit (DDD) */
+  boundedContext: z.string(),
+  /** Domain terms that must stay consistent across prompts, tests, and code */
+  ubiquitousLanguage: z.array(z.string()).min(1),
+  /** Business invariants this unit must preserve */
+  domainInvariants: z.array(z.string()).min(1),
+  /** Gherkin feature title for this unit's executable specification */
+  gherkinFeature: z.string(),
+  /** Optional rule grouping for this unit's scenarios */
+  gherkinRule: z.string().nullable(),
+  /** Executable scenarios driving BDD/TDD implementation */
+  gherkinScenarios: z.array(gherkinScenarioSchema).min(1),
   /** Complexity tier — determines quality pipeline depth */
   tier: z.enum(["trivial", "small", "medium", "large"]),
 });

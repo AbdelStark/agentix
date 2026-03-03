@@ -16,6 +16,7 @@ Your job is to:
 3. Determine dependency relationships between units
 4. Assign complexity tiers based on scope
 5. Write concrete acceptance criteria for each unit
+6. Define a DDD boundary and BDD executable spec for each unit
 
 ## Rules
 
@@ -26,6 +27,16 @@ Your job is to:
 - Don't create artificial sequential ordering — if two units can be done in parallel, they should have no deps between them
 - Acceptance criteria must be verifiable (not vague like "works correctly")
 - **Tests are part of the work unit, not a follow-on unit.** Do NOT create separate "write tests for X" units. Tests for a behavior are written alongside that behavior in the same unit. A unit that adds a feature includes both the implementation and the tests. A unit that fixes a bug includes the reproducing test and the fix. Never decompose "implement X" + "test X" as two separate units.
+- Every unit must include a clear DDD boundary:
+  - 'boundedContext': a stable domain boundary name (ex: "payments-ledger")
+  - 'ubiquitousLanguage': at least one domain term that must remain consistent in code/tests/docs
+  - 'domainInvariants': at least one non-negotiable business rule that cannot be broken
+- Every unit must include BDD executable specifications:
+  - 'gherkinFeature': feature name
+  - 'gherkinRule': optional rule grouping (or null)
+  - 'gherkinScenarios': one or more concrete Given/When/Then scenarios, each observable and testable
+- Gherkin scenarios must be specific enough that a test can be written directly from each scenario without guessing.
+- Acceptance criteria and Gherkin scenarios must align 1:1 in intent.
 
 ## Complexity Tiers
 
@@ -46,6 +57,20 @@ Return ONLY valid JSON matching this schema:
       "description": "What needs to be done, in detail",
       "deps": ["other-unit-id"],
       "acceptance": ["specific verifiable criterion"],
+      "boundedContext": "payments-ledger",
+      "ubiquitousLanguage": ["settlement", "capture", "authorization"],
+      "domainInvariants": ["A capture cannot exceed its authorization amount"],
+      "gherkinFeature": "Capture authorized payment",
+      "gherkinRule": "Captured amount stays within authorization",
+      "gherkinScenarios": [
+        {
+          "id": "capture-within-authorized-limit",
+          "title": "Capture succeeds when within authorization amount",
+          "given": ["an authorization exists for 100 USD"],
+          "when": ["a capture for 40 USD is requested"],
+          "then": ["capture succeeds", "remaining capturable amount is 60 USD"]
+        }
+      ],
       "tier": "small"
     }
   ]
@@ -78,7 +103,10 @@ ${rfcContent}
 
 ## Task
 
-Decompose this RFC into work units. Prefer fewer cohesive units over many granular ones — minimize cross-unit file overlap to avoid merge conflicts. Only add dependencies where there's a real code dependency. Return ONLY the JSON object.`;
+Decompose this RFC into work units. Prefer fewer cohesive units over many granular ones — minimize cross-unit file overlap to avoid merge conflicts. Only add dependencies where there's a real code dependency. Each unit must carry:
+- DDD boundary metadata ('boundedContext', 'ubiquitousLanguage', 'domainInvariants')
+- BDD executable specification ('gherkinFeature', 'gherkinRule', 'gherkinScenarios' with Given/When/Then)
+Return ONLY the JSON object.`;
 }
 
 /**
@@ -227,8 +255,12 @@ export function printPlanSummary(
   layers: WorkUnit[][],
 ): void {
   const tierCounts = { trivial: 0, small: 0, medium: 0, large: 0 };
+  const boundedContexts = new Set<string>();
+  let scenarioCount = 0;
   for (const u of plan.units) {
     tierCounts[u.tier]++;
+    boundedContexts.add(u.boundedContext);
+    scenarioCount += u.gherkinScenarios.length;
   }
 
   console.log(
@@ -239,6 +271,8 @@ export function printPlanSummary(
   for (const [tier, count] of Object.entries(tierCounts)) {
     if (count > 0) console.log(`    ${tier}: ${count}`);
   }
+  console.log(`\n  Bounded contexts: ${boundedContexts.size}`);
+  console.log(`  Gherkin scenarios: ${scenarioCount}`);
 
   console.log("\n  Execution layers (units in same layer run in parallel):");
   for (let i = 0; i < layers.length; i++) {

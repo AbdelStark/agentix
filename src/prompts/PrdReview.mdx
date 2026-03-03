@@ -5,6 +5,21 @@ Category: {props.unitCategory}
 
 {props.acceptanceCriteria && props.acceptanceCriteria.length > 0 ? `\n## Acceptance Criteria\n${props.acceptanceCriteria.map((a, i) => `${i + 1}. ${a}`).join('\n')}` : ''}
 
+## Domain Context (DDD)
+
+Bounded context: {props.boundedContext}
+Ubiquitous language:
+{props.ubiquitousLanguage && props.ubiquitousLanguage.length > 0 ? props.ubiquitousLanguage.map((term, i) => `${i + 1}. ${term}`).join('\n') : '- None provided'}
+Domain invariants:
+{props.domainInvariants && props.domainInvariants.length > 0 ? props.domainInvariants.map((inv, i) => `${i + 1}. ${inv}`).join('\n') : '- None provided'}
+
+## Executable Specification (BDD)
+
+Feature: {props.gherkinFeature}
+{props.gherkinScenarios && props.gherkinScenarios.length > 0
+  ? props.gherkinScenarios.map((s, idx) => `### Scenario ${idx + 1}: ${s.title} (${s.id})\nGiven:\n${(s.given || []).map((g) => `- ${g}`).join('\n')}\nWhen:\n${(s.when || []).map((w) => `- ${w}`).join('\n')}\nThen:\n${(s.then || []).map((t) => `- ${t}`).join('\n')}`).join('\n\n')
+  : 'No scenarios provided'}
+
 You are reviewing this unit's implementation for **spec compliance only**.
 You are NOT reviewing code quality — that's a separate review.
 
@@ -19,6 +34,8 @@ You are NOT reviewing code quality — that's a separate review.
   ? props.testResults.map(r => `- ${r.name}: ${r.status}`).join('\n')
   : 'No test results provided'}
 {props.failingSummary ? `Failures: ${props.failingSummary}` : ''}
+{typeof props.scenariosTotal === "number" ? `Scenario coverage: ${props.scenariosCovered ?? 0}/${props.scenariosTotal}` : ''}
+{props.uncoveredScenarios && props.uncoveredScenarios.length > 0 ? `Uncovered scenarios: ${props.uncoveredScenarios.join(', ')}` : ''}
 
 ## Review Checklist
 
@@ -33,6 +50,8 @@ READ every file modified/created. For each, verify:
 - Unit tests exist for new code
 - Integration tests exist for new user-facing features
 - Test quality: edge cases, error paths, not just happy path
+- Every Gherkin scenario has direct automated coverage
+- Domain invariants are explicitly validated by tests
 
 Flag ALL spec compliance issues. Be thorough.
 

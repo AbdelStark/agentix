@@ -23,19 +23,27 @@ declare module "*/prompts/FinalReview.mdx" {
   interface FinalReviewPromptProps {
     acceptanceCriteria?: any;
     believesComplete?: any;
+    boundedContext: any;
     buildPassed?: any;
     codeApproved?: any;
     codeSeverity?: any;
     description: any;
+    domainInvariants?: any;
     failingSummary?: any;
+    gherkinFeature: any;
+    gherkinScenarios?: any;
     implSummary?: any;
     issuesResolved?: any;
     maxPasses: any;
     pass: any;
     prdApproved?: any;
     prdSeverity?: any;
+    scenariosCovered?: any;
+    scenariosTotal?: any;
+    tddEvidence?: any;
     testsFailCount?: any;
     testsPassCount?: any;
+    uncoveredScenarios?: any;
     unitId: any;
     unitName: any;
   }
@@ -47,20 +55,25 @@ declare module "*/prompts/Implement.mdx" {
   interface ImplementPromptProps {
     acceptanceCriteria?: any;
     architectureRules?: any;
+    boundedContext: any;
     branchPrefix?: any;
     commitPrefix?: any;
     contextFilePath: any;
     depSummaries?: any;
+    domainInvariants?: any;
     emojiPrefixes?: any;
     evictionContext?: any;
     failingTests?: any;
     formatterCommands?: any;
+    gherkinFeature: any;
+    gherkinScenarios?: any;
     implementationGuidance?: any;
     implementationSteps?: any;
     planFilePath: any;
     previousImplementation?: any;
     reviewFeedback?: any;
     testWritingGuidance?: any;
+    ubiquitousLanguage?: any;
     unitCategory: any;
     unitId: any;
     unitName: any;
@@ -73,13 +86,18 @@ declare module "*/prompts/Implement.mdx" {
 declare module "*/prompts/Plan.mdx" {
   interface PlanPromptProps {
     acceptanceCriteria?: any;
+    boundedContext: any;
     branchPrefix?: any;
     commitPrefix?: any;
     contextFilePath: any;
+    domainInvariants?: any;
     evictionContext?: any;
+    gherkinFeature: any;
+    gherkinScenarios?: any;
     planFilePath: any;
     researchSummary?: any;
     tddPatterns?: any;
+    ubiquitousLanguage?: any;
     unitCategory: any;
     unitDescription: any;
     unitId: any;
@@ -92,11 +110,19 @@ declare module "*/prompts/Plan.mdx" {
 declare module "*/prompts/PrdReview.mdx" {
   interface PrdReviewPromptProps {
     acceptanceCriteria?: any;
+    boundedContext: any;
+    domainInvariants?: any;
     failingSummary?: any;
     filesCreated?: any;
     filesModified?: any;
+    gherkinFeature: any;
+    gherkinScenarios?: any;
+    scenariosCovered?: any;
+    scenariosTotal: any;
     specChecks?: any;
     testResults?: any;
+    ubiquitousLanguage?: any;
+    uncoveredScenarios?: any;
     unitCategory: any;
     unitId: any;
     unitName: any;
@@ -107,14 +133,19 @@ declare module "*/prompts/PrdReview.mdx" {
 
 declare module "*/prompts/Research.mdx" {
   interface ResearchPromptProps {
+    boundedContext: any;
     branchPrefix?: any;
     contextFilePath: any;
+    domainInvariants?: any;
     evictionContext?: any;
+    gherkinFeature: any;
+    gherkinScenarios?: any;
     referenceFiles?: any;
     referencePaths?: any;
     relevantFiles?: any;
     rfcSections?: any;
     rfcSource?: any;
+    ubiquitousLanguage?: any;
     unitCategory: any;
     unitDescription: any;
     unitId: any;
@@ -147,9 +178,12 @@ declare module "*/prompts/ReviewFix.mdx" {
 declare module "*/prompts/Test.mdx" {
   interface TestPromptProps {
     branchPrefix?: any;
+    domainInvariants?: any;
     filesCreated?: any;
     filesModified?: any;
     fixCommitPrefix?: any;
+    gherkinFeature: any;
+    gherkinScenarios?: any;
     testSuites?: any;
     unitCategory: any;
     unitId: any;

@@ -21,7 +21,7 @@ Common infrastructure shared by all Agentix workflows.
 
 ## 1. What Is Agentix
 
-Agentix is a multi-agent AI development pipeline built on the Smithers workflow engine. It takes a description of work to be done on a codebase and runs it through a configurable pipeline of AI agents (research, plan, implement, test, review, land).
+Agentix is a multi-agent AI development pipeline built on the Smithers workflow engine. It takes a description of work to be done on a codebase and runs it through a configurable pipeline of AI agents (research, plan, implement, test, review, land), with DDD boundaries and BDD executable specs enforced per work unit.
 
 Two workflow modes exist:
 
@@ -43,6 +43,13 @@ Both modes share the same core infrastructure documented here: the Smithers engi
 | VCS | jj (Jujutsu) exclusively, no git fallback |
 | Prompt templates | MDX (Agentix), template literals (ScheduledWork) |
 | Agents | ClaudeCodeAgent (claude-sonnet-4-6 / claude-opus-4-6), CodexAgent (gpt-5.3-codex) |
+
+### Quality Contract
+
+- **DDD**: every unit carries `boundedContext`, `ubiquitousLanguage`, and `domainInvariants`
+- **BDD**: every unit carries `gherkinFeature` and `gherkinScenarios` (Given/When/Then)
+- **TDD**: implementation is scenario-driven and validated with explicit scenario coverage metrics
+- **No Slop**: incomplete scenario coverage blocks readiness
 
 ---
 

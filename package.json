@@ -36,8 +36,11 @@
     "workflow",
     "orchestration",
     "agentix",
-    "multi-agent",
+    "ddd",
+    "bdd",
     "tdd",
+    "gherkin",
+    "multi-agent",
     "code-review"
   ],
   "scripts": {

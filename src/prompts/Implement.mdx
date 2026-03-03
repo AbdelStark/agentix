@@ -3,6 +3,21 @@ IMPLEMENTATION PHASE — Unit: {props.unitId}
 Title: {props.unitName}
 Category: {props.unitCategory}
 
+## Domain Context (DDD)
+
+Bounded context: {props.boundedContext}
+Ubiquitous language:
+{props.ubiquitousLanguage && props.ubiquitousLanguage.length > 0 ? props.ubiquitousLanguage.map((term, i) => `${i + 1}. ${term}`).join('\n') : '- None provided'}
+Domain invariants:
+{props.domainInvariants && props.domainInvariants.length > 0 ? props.domainInvariants.map((inv, i) => `${i + 1}. ${inv}`).join('\n') : '- None provided'}
+
+## Executable Specification (BDD)
+
+Feature: {props.gherkinFeature}
+{props.gherkinScenarios && props.gherkinScenarios.length > 0
+  ? props.gherkinScenarios.map((s, idx) => `### Scenario ${idx + 1}: ${s.title} (${s.id})\nGiven:\n${(s.given || []).map((g) => `- ${g}`).join('\n')}\nWhen:\n${(s.when || []).map((w) => `- ${w}`).join('\n')}\nThen:\n${(s.then || []).map((t) => `- ${t}`).join('\n')}`).join('\n\n')
+  : 'No scenarios provided'}
+
 ## Context
 
 Read the plan file: {props.planFilePath}
@@ -27,6 +42,12 @@ Implementation steps from plan:
 Rule: **Implement a small ATOMIC UNIT** of work possible for ONE feature of the plan. For example, one module with related functionalities, one file, one test module, etc.
 Don't aim to on _small_ units only: try to group into ONE reasonable work unit achievable in one commit. We'll re-iterate for each unit until completion.
 
+## Non-Slop Contract
+
+- No fake implementations, placeholders, TODO-driven exits, or silent fallbacks.
+- No speculative abstractions without an active scenario proving need.
+- No merge-ready output unless tests, invariants, and scenario coverage are real and passing.
+
 ### Step 0: Does this unit change observable behavior?
 
 **TDD is mandatory** when the unit changes observable behavior:
@@ -41,6 +62,13 @@ Don't aim to on _small_ units only: try to group into ONE reasonable work unit a
 - Work where the compiler already enforces correctness
 
 If in doubt, write the test. If you can't write a meaningful test, the work is mechanical.
+
+### Step 0.5: Lock scenario coverage before coding
+
+- Build a scenario checklist from `gherkinScenarios`.
+- Keep scenario IDs visible in tests (test names, comments, or table-driven cases).
+- Do not close the unit with uncovered scenarios.
+- Each domain invariant must be asserted by at least one test.
 
 ### When TDD Applies — Red → Green → Refactor
 
@@ -89,6 +117,7 @@ Write the SMALLEST amount of code to make the failing test pass.
 - If other tests break: fix them now
 
 **Repeat Steps 1-2 for each behavior the unit needs.**
+- Repeat until every Gherkin scenario has at least one test proving its Then clauses.
 
 #### Common Rationalizations — Don't Fall For These
 

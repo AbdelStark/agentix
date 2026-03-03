@@ -1,6 +1,15 @@
 # Agentix
 
-An RFC-driven, multi-agent development pipeline. Takes an RFC document, decomposes it into work units with a dependency DAG, runs each unit through a quality pipeline of specialized AI agents, and lands them onto main via a merge queue.
+An RFC-driven, multi-agent development pipeline. Takes an RFC document, decomposes it into DDD-bounded work units with executable BDD scenarios, runs each unit through a TDD-first quality pipeline, and lands them onto main via a merge queue.
+
+## Excellence Doctrine
+
+Agentix is explicitly opinionated:
+
+- DDD for bounded contexts and invariant safety
+- BDD (Gherkin) for executable specification and shared language
+- TDD for implementation discipline and regression resistance
+- Zero-slop merge policy for production-grade output
 
 For infrastructure details (Smithers engine, jj VCS, agent system), see [CONCEPTS.md](CONCEPTS.md).
 

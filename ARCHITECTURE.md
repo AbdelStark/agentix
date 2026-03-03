@@ -6,3 +6,5 @@ Technical documentation for the Agentix multi-agent development pipeline.
 |----------|-------|
 | **[CONCEPTS.md](CONCEPTS.md)** | Infrastructure: Smithers engine, agent system, jj VCS, worktree isolation, tiers. |
 | **[AGENTIX.md](AGENTIX.md)** | The pipeline: setup, execution, merge queue, eviction. |
+| **[docs/agentic-excellence-thesis.md](docs/agentic-excellence-thesis.md)** | DDD + BDD + TDD doctrine and quality philosophy. |
+| **[docs/agentic-excellence-roadmap.md](docs/agentic-excellence-roadmap.md)** | Execution plan for production-grade agentic excellence. |

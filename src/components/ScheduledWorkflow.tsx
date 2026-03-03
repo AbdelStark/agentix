@@ -56,6 +56,16 @@ function tierComplete(
   // All tiers require tests to pass
   const test = ctx.latest("test", `${unitId}:test`);
   if (!test?.testsPassed) return false;
+  if (
+    typeof test?.scenariosTotal === "number" &&
+    typeof test?.scenariosCovered === "number" &&
+    test.scenariosCovered < test.scenariosTotal
+  ) {
+    return false;
+  }
+  if (Array.isArray(test?.uncoveredScenarios) && test.uncoveredScenarios.length > 0) {
+    return false;
+  }
 
   // buildPassed is required unless a final_review explicitly overrides it
   // (handles pre-existing failures in unrelated packages)
@@ -269,6 +279,13 @@ export function ScheduledWorkflow({
       const testOut = ctx.latest("test", `${u.id}:test`);
       if (testOut && !testOut.testsPassed) {
         reason = `Tests failing: ${testOut.failingSummary ?? "unknown"}`;
+      }
+      if (
+        testOut &&
+        Array.isArray(testOut.uncoveredScenarios) &&
+        testOut.uncoveredScenarios.length > 0
+      ) {
+        reason = `Scenario coverage incomplete: ${testOut.uncoveredScenarios.join(", ")}`;
       }
       return { unitId: u.id, lastStage, reason };
     });

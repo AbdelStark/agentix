@@ -3,6 +3,16 @@ TESTING PHASE — Unit: {props.unitId}
 Title: {props.unitName}
 Category: {props.unitCategory}
 
+## Executable Specification (BDD)
+
+Feature: {props.gherkinFeature}
+{props.gherkinScenarios && props.gherkinScenarios.length > 0
+  ? props.gherkinScenarios.map((s, idx) => `### Scenario ${idx + 1}: ${s.title} (${s.id})\nGiven:\n${(s.given || []).map((g) => `- ${g}`).join('\n')}\nWhen:\n${(s.when || []).map((w) => `- ${w}`).join('\n')}\nThen:\n${(s.then || []).map((t) => `- ${t}`).join('\n')}`).join('\n\n')
+  : 'No scenarios provided'}
+
+Domain invariants:
+{props.domainInvariants && props.domainInvariants.length > 0 ? props.domainInvariants.map((inv, i) => `${i + 1}. ${inv}`).join('\n') : '- None provided'}
+
 {props.whatWasDone ? `\n## What was implemented\n${props.whatWasDone}` : ''}
 {props.filesCreated && props.filesCreated.length > 0 ? `\nFiles created: ${props.filesCreated.map(f => `- ${f}`).join('\n')}` : ''}
 {props.filesModified && props.filesModified.length > 0 ? `\nFiles modified: ${props.filesModified.map(f => `- ${f}`).join('\n')}` : ''}
@@ -17,6 +27,13 @@ Run ALL of the following test categories and report results:
 - Check that test files exist for new code
 - Check that integration tests exist for new user-facing features
 - If tests were written AFTER implementation (not TDD), flag as an issue
+- Produce scenario coverage:
+  - `scenariosTotal`: total number of Gherkin scenarios
+  - `scenariosCovered`: how many have direct automated test coverage
+  - `uncoveredScenarios`: list scenario IDs still uncovered
+  - `tddEvidence`: concise explanation of how RED->GREEN->REFACTOR was followed
+  - `scenarioCoverageNotes`: short narrative on coverage quality and gaps
+- If any scenario is uncovered, treat the unit as NOT ready for merge.
 
 If any tests fail and you need to fix code to make them pass, commit each fix atomically:
 - `jj describe -m "{props.fixCommitPrefix || '🐛 fix'}(SCOPE): what was fixed"`
