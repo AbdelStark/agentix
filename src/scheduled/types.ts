@@ -118,6 +118,8 @@ export const SCHEDULED_TIERS = {
     "test",
     "prd-review",
     "code-review",
+    "security-review",
+    "performance-review",
     "review-fix",
   ] as const,
   large: [
@@ -127,6 +129,8 @@ export const SCHEDULED_TIERS = {
     "test",
     "prd-review",
     "code-review",
+    "security-review",
+    "performance-review",
     "review-fix",
     "final-review",
   ] as const,

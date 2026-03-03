@@ -8,10 +8,14 @@ Use this process for every tagged release.
 2. Run:
    - `bun install --frozen-lockfile`
    - `bun run check`
-3. Update `CHANGELOG.md`:
+3. Review policy gate configuration:
+   - Confirm `agentix.policy.json` thresholds match release risk posture.
+   - Confirm medium severity acceptance requires rationale.
+   - Confirm `high`/`critical` remain blocking for medium/large units.
+4. Update `CHANGELOG.md`:
    - Move completed items from `[Unreleased]` to a new version section.
    - Use heading format: `## [x.y.z] - YYYY-MM-DD`.
-4. Verify release consistency:
+5. Verify release consistency:
    - `bun run release:check`
 
 ## 2. Version and Tag
@@ -27,8 +31,9 @@ Use this process for every tagged release.
 `publish.yml` runs these mandatory gates before `npm publish`:
 - `bun run check`
 - `bun run release:check`
+- policy gate enforcement via workflow unit tests (including security/performance severity blocking)
 
-If either fails, publish is blocked.
+If any gate fails, publish is blocked.
 
 ## 4. Post-Release
 

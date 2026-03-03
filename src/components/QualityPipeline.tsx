@@ -3,6 +3,8 @@ import { Task, Sequence, Parallel, Worktree } from "smithers-orchestrator";
 import type { SmithersCtx, AgentLike } from "smithers-orchestrator";
 import { SCHEDULED_TIERS, type WorkUnit, type WorkPlan } from "../scheduled/types";
 import { scheduledOutputSchemas } from "../scheduled/schemas";
+import type { AgentixPolicyConfig, PolicyReviewOutput } from "../scheduled/policy";
+import { getPolicyChecks } from "../scheduled/policy";
 
 import ResearchPrompt from "../prompts/Research.mdx";
 import PlanPrompt from "../prompts/Plan.mdx";
@@ -10,6 +12,8 @@ import ImplementPrompt from "../prompts/Implement.mdx";
 import TestPrompt from "../prompts/Test.mdx";
 import PrdReviewPrompt from "../prompts/PrdReview.mdx";
 import CodeReviewPrompt from "../prompts/CodeReview.mdx";
+import SecurityReviewPrompt from "../prompts/SecurityReview.mdx";
+import PerformanceReviewPrompt from "../prompts/PerformanceReview.mdx";
 import ReviewFixPrompt from "../prompts/ReviewFix.mdx";
 import FinalReviewPrompt from "../prompts/FinalReview.mdx";
 
@@ -29,6 +33,8 @@ export type QualityPipelineAgents = {
   tester: AgentLike | AgentLike[];
   prdReviewer: AgentLike | AgentLike[];
   codeReviewer: AgentLike | AgentLike[];
+  securityReviewer: AgentLike | AgentLike[];
+  performanceReviewer: AgentLike | AgentLike[];
   reviewFixer: AgentLike | AgentLike[];
   finalReviewer: AgentLike | AgentLike[];
 };
@@ -39,6 +45,7 @@ export type QualityPipelineProps = {
   outputs: ScheduledOutputs;
   agents: QualityPipelineAgents;
   workPlan: WorkPlan;
+  policyConfig: AgentixPolicyConfig;
   depSummaries: DepSummary[];
   evictionContext: string | null;
   pass?: number;
@@ -77,6 +84,53 @@ function buildIssueList(issues: unknown): string[] {
   });
 }
 
+function formatPolicyFeedback(
+  label: string,
+  review: Partial<PolicyReviewOutput> | null | undefined,
+): string | null {
+  if (!review) return null;
+  const severity = typeof review.severity === "string" ? review.severity : "none";
+  const approved = review.approved === true ? "approved" : "not approved";
+  const actions = Array.isArray(review.remediationActions)
+    ? review.remediationActions.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  const evidence = Array.isArray(review.evidence)
+    ? review.evidence.filter((entry): entry is string => typeof entry === "string")
+    : [];
+  const rationale =
+    typeof review.acceptanceRationale === "string" && review.acceptanceRationale.trim().length > 0
+      ? `Acceptance rationale: ${review.acceptanceRationale.trim()}`
+      : null;
+  const actionSummary =
+    actions.length > 0 ? `Remediation actions:\n- ${actions.join("\n- ")}` : null;
+  const evidenceSummary = evidence.length > 0 ? `Evidence:\n- ${evidence.join("\n- ")}` : null;
+
+  return [
+    `${label} review: severity=${severity}, ${approved}`,
+    actionSummary,
+    evidenceSummary,
+    rationale,
+  ]
+    .filter(Boolean)
+    .join("\n");
+}
+
+function isPolicyReviewResolvedForFixSkip(
+  review: Partial<PolicyReviewOutput> | null | undefined,
+): boolean {
+  if (!review) return false;
+  const severity = typeof review.severity === "string" ? review.severity : "none";
+  if (severity === "high" || severity === "critical") return false;
+  if (severity === "medium") {
+    if (!review.approved) return false;
+    return (
+      typeof review.acceptanceRationale === "string" &&
+      review.acceptanceRationale.trim().length > 0
+    );
+  }
+  return Boolean(review.approved);
+}
+
 function buildTestSuites(workPlan: WorkPlan): Array<{ name: string; command: string; description: string }> {
   const suites: Array<{ name: string; command: string; description: string }> = [];
 
@@ -96,6 +150,7 @@ export function QualityPipeline({
   outputs,
   agents,
   workPlan,
+  policyConfig,
   depSummaries,
   evictionContext,
   pass = 0,
@@ -113,6 +168,11 @@ export function QualityPipeline({
   const test = ctx.latest("test", `${uid}:test`);
   const prdReview = ctx.latest("prd_review", `${uid}:prd-review`);
   const codeReview = ctx.latest("code_review", `${uid}:code-review`);
+  const securityReview = ctx.latest("security_review", `${uid}:security-review`);
+  const performanceReview = ctx.latest(
+    "performance_review",
+    `${uid}:performance-review`,
+  );
   const reviewFix = ctx.latest("review_fix", `${uid}:review-fix`);
   const finalReview = ctx.latest("final_review", `${uid}:final-review`);
 
@@ -120,7 +180,12 @@ export function QualityPipeline({
     finalReview?.reasoning ? `Final review feedback:\n${finalReview.reasoning}` : null,
     prdReview?.feedback ? `PRD review feedback:\n${prdReview.feedback}` : null,
     codeReview?.feedback ? `Code review feedback:\n${codeReview.feedback}` : null,
+    formatPolicyFeedback("Security", securityReview),
+    formatPolicyFeedback("Performance", performanceReview),
   ]);
+
+  const securityChecks = getPolicyChecks(policyConfig, "security");
+  const performanceChecks = getPolicyChecks(policyConfig, "performance");
 
   const verifyCommands = [
     ...Object.values(workPlan.repo.buildCmds),
@@ -131,7 +196,13 @@ export function QualityPipeline({
 
   const bothApproved =
     (prdReview?.approved ?? !tierHasStep(tier, "prd-review")) &&
-    (codeReview?.approved ?? false);
+    (codeReview?.approved ?? false) &&
+    (tierHasStep(tier, "security-review")
+      ? isPolicyReviewResolvedForFixSkip(securityReview)
+      : true) &&
+    (tierHasStep(tier, "performance-review")
+      ? isPolicyReviewResolvedForFixSkip(performanceReview)
+      : true);
 
   return (
     <Worktree path={`/tmp/workflow-wt-${uid}`} branch={`${branchPrefix}${uid}`}>
@@ -326,6 +397,56 @@ export function QualityPipeline({
               />
             </Task>
           )}
+          {tierHasStep(tier, "security-review") && (
+            <Task
+              id={`${uid}:security-review`}
+              output={outputs.security_review}
+              agent={agents.securityReviewer}
+              retries={retries}
+              continueOnFail
+            >
+              <SecurityReviewPrompt
+                unitId={uid}
+                unitName={unit.name}
+                unitCategory={tier}
+                boundedContext={unit.boundedContext}
+                domainInvariants={unit.domainInvariants}
+                whatWasDone={impl?.whatWasDone ?? "Unknown"}
+                filesCreated={impl?.filesCreated ?? []}
+                filesModified={impl?.filesModified ?? []}
+                buildPassed={test?.buildPassed ?? false}
+                testsPassed={test?.testsPassed ?? false}
+                scenariosCovered={test?.scenariosCovered ?? 0}
+                scenariosTotal={test?.scenariosTotal ?? unit.gherkinScenarios.length}
+                policyChecks={securityChecks}
+              />
+            </Task>
+          )}
+          {tierHasStep(tier, "performance-review") && (
+            <Task
+              id={`${uid}:performance-review`}
+              output={outputs.performance_review}
+              agent={agents.performanceReviewer}
+              retries={retries}
+              continueOnFail
+            >
+              <PerformanceReviewPrompt
+                unitId={uid}
+                unitName={unit.name}
+                unitCategory={tier}
+                boundedContext={unit.boundedContext}
+                domainInvariants={unit.domainInvariants}
+                whatWasDone={impl?.whatWasDone ?? "Unknown"}
+                filesCreated={impl?.filesCreated ?? []}
+                filesModified={impl?.filesModified ?? []}
+                buildPassed={test?.buildPassed ?? false}
+                testsPassed={test?.testsPassed ?? false}
+                scenariosCovered={test?.scenariosCovered ?? 0}
+                scenariosTotal={test?.scenariosTotal ?? unit.gherkinScenarios.length}
+                policyChecks={performanceChecks}
+              />
+            </Task>
+          )}
         </Parallel>
 
         {tierHasStep(tier, "review-fix") && (
@@ -346,6 +467,14 @@ export function QualityPipeline({
               codeSeverity={codeReview?.severity ?? "none"}
               codeFeedback={codeReview?.feedback ?? ""}
               codeIssues={buildIssueList(codeReview?.issues)}
+              securitySeverity={securityReview?.severity ?? "none"}
+              securityIssues={buildIssueList(securityReview?.issues)}
+              securityRemediationActions={securityReview?.remediationActions ?? []}
+              securityAcceptanceRationale={securityReview?.acceptanceRationale ?? null}
+              performanceSeverity={performanceReview?.severity ?? "none"}
+              performanceIssues={buildIssueList(performanceReview?.issues)}
+              performanceRemediationActions={performanceReview?.remediationActions ?? []}
+              performanceAcceptanceRationale={performanceReview?.acceptanceRationale ?? null}
               validationCommands={verifyCommands}
               commitPrefix="fix"
               emojiPrefixes="fix, refactor, test"
@@ -388,6 +517,12 @@ export function QualityPipeline({
               prdApproved={prdReview?.approved ?? null}
               codeSeverity={codeReview?.severity ?? null}
               codeApproved={codeReview?.approved ?? null}
+              securitySeverity={securityReview?.severity ?? null}
+              securityApproved={securityReview?.approved ?? null}
+              securityAcceptanceRationale={securityReview?.acceptanceRationale ?? null}
+              performanceSeverity={performanceReview?.severity ?? null}
+              performanceApproved={performanceReview?.approved ?? null}
+              performanceAcceptanceRationale={performanceReview?.acceptanceRationale ?? null}
               issuesResolved={reviewFix?.allIssuesResolved ?? null}
             />
           </Task>

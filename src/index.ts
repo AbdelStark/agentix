@@ -34,20 +34,39 @@ export type {
 
 // Scheduled work types
 export {
+  DEFAULT_AGENTIX_POLICY_CONFIG,
+  POLICY_CLASSES,
+  POLICY_SEVERITIES,
+  agentixPolicyConfigInputSchema,
   computeLayers,
+  evaluatePolicyGates,
+  getPolicyChecks,
+  loadAgentixPolicyConfig,
+  policyIssueSchema,
+  policyReviewOutputSchema,
+  policySeveritySchema,
   validateDAG,
   SCHEDULED_TIERS,
   workPlanSchema,
   workUnitSchema,
   agentixConfigSchema,
-} from "./scheduled/types";
+} from "./scheduled";
 
 export type {
+  AgentixPolicyConfig,
+  LoadedPolicyConfig,
+  PolicyClass,
+  PolicyClassConfig,
+  PolicyGateDecision,
+  PolicyGateEvaluation,
+  PolicyReviewGateInput,
+  PolicyReviewOutput,
+  PolicySeverity,
   WorkPlan,
   WorkUnit,
   AgentixConfig,
   ScheduledTier,
-} from "./scheduled/types";
+} from "./scheduled";
 
 // Schemas
 export { scheduledOutputSchemas } from "./scheduled/schemas";

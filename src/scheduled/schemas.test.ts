@@ -100,4 +100,60 @@ describe("scheduledOutputSchemas.test", () => {
       }),
     ).toThrow();
   });
+
+  test("accepts policy review payload with remediation evidence", () => {
+    const parsed = scheduledOutputSchemas.security_review.parse({
+      approved: true,
+      severity: "medium",
+      issues: [
+        {
+          severity: "medium",
+          description: "Token validation fallback allows unsigned tokens",
+          file: "src/auth/token.ts",
+          recommendation: "Require signature verification for all token paths",
+          check: "auth-boundary",
+        },
+      ],
+      remediationActions: [
+        "Enforced strict signature validation in token parser",
+      ],
+      evidence: [
+        "Added regression tests for unsigned token rejection",
+      ],
+      acceptanceRationale:
+        "Accepted temporarily with compensating control in API gateway until rollout completes.",
+    });
+
+    expect(parsed.severity).toBe("medium");
+    expect(parsed.issues).toHaveLength(1);
+  });
+
+  test("rejects policy review payload missing required evidence fields", () => {
+    expect(() =>
+      scheduledOutputSchemas.performance_review.parse({
+        approved: false,
+        severity: "high",
+        issues: [
+          {
+            severity: "high",
+            description: "Hot path performs O(n^2) recomputation",
+            file: "src/cache/hot-path.ts",
+          },
+        ],
+      }),
+    ).toThrow();
+  });
+
+  test("rejects medium severity approval without acceptance rationale", () => {
+    expect(() =>
+      scheduledOutputSchemas.security_review.parse({
+        approved: true,
+        severity: "medium",
+        issues: [],
+        remediationActions: [],
+        evidence: ["manual risk acceptance noted"],
+        acceptanceRationale: null,
+      }),
+    ).toThrow();
+  });
 });

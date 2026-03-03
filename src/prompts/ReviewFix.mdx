@@ -3,7 +3,7 @@ REVIEW FIX PHASE — Unit: {props.unitId}
 Title: {props.unitName}
 Category: {props.unitCategory}
 
-Two reviews have been completed. Fix ALL issues from BOTH reviews.
+Multiple reviews have been completed. Fix ALL actionable issues across spec, code, security, and performance reviews.
 
 ## Spec Review Issues
 Severity: {props.specSeverity}
@@ -17,15 +17,37 @@ Feedback: {props.codeFeedback}
 Issues:
 {props.codeIssues && props.codeIssues.length > 0 ? props.codeIssues.map((issue, i) => `${i + 1}. ${issue}`).join('\n') : 'None'}
 
+## Security Policy Review Issues
+Severity: {props.securitySeverity}
+Issues:
+{props.securityIssues && props.securityIssues.length > 0 ? props.securityIssues.map((issue, i) => `${i + 1}. ${issue}`).join('\n') : 'None'}
+Recommended remediation actions:
+{props.securityRemediationActions && props.securityRemediationActions.length > 0 ? props.securityRemediationActions.map((action, i) => `${i + 1}. ${action}`).join('\n') : 'None'}
+{props.securityAcceptanceRationale ? `Existing acceptance rationale: ${props.securityAcceptanceRationale}` : ''}
+
+## Performance Policy Review Issues
+Severity: {props.performanceSeverity}
+Issues:
+{props.performanceIssues && props.performanceIssues.length > 0 ? props.performanceIssues.map((issue, i) => `${i + 1}. ${issue}`).join('\n') : 'None'}
+Recommended remediation actions:
+{props.performanceRemediationActions && props.performanceRemediationActions.length > 0 ? props.performanceRemediationActions.map((action, i) => `${i + 1}. ${action}`).join('\n') : 'None'}
+{props.performanceAcceptanceRationale ? `Existing acceptance rationale: ${props.performanceAcceptanceRationale}` : ''}
+
 ## Your Task
 
-For EACH issue from both reviews:
+For EACH issue from all reviews:
 1. Read the relevant file
 2. Determine if the issue is valid or a false positive
 3. If valid: make the fix
 4. If false positive: document why in your output
 5. After each fix, run relevant validation commands:
 {props.validationCommands && props.validationCommands.length > 0 ? props.validationCommands.map(c => `   - ${c}`).join('\n') : '   - Run formatters and tests'}
+
+## Policy Resolution Rules
+
+- `high` or `critical` policy findings must be fixed; they block merge.
+- `medium` policy findings must either be fixed OR explicitly accepted with rationale.
+- If you choose acceptance for a medium issue, include a specific rationale in your output and confirm compensating controls.
 
 ## TDD for Fixes
 

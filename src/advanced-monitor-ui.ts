@@ -24,6 +24,8 @@ const DISPLAY_STAGES = [
   { key: "test",         abbr: "T", table: "test",         nodeId: "test" },
   { key: "prd-review",   abbr: "D", table: "prd_review",   nodeId: "prd-review" },
   { key: "code-review",  abbr: "V", table: "code_review",  nodeId: "code-review" },
+  { key: "security-review", abbr: "S", table: "security_review", nodeId: "security-review" },
+  { key: "performance-review", abbr: "P", table: "performance_review", nodeId: "performance-review" },
   { key: "review-fix",   abbr: "F", table: "review_fix",   nodeId: "review-fix" },
   { key: "final-review", abbr: "G", table: "final_review", nodeId: "final-review" },
 ] as const;
@@ -31,8 +33,8 @@ const DISPLAY_STAGES = [
 const TIER_STAGES: Record<string, readonly string[]> = {
   trivial: ["implement", "test"],
   small:   ["implement", "test", "code-review"],
-  medium:  ["research", "plan", "implement", "test", "prd-review", "code-review", "review-fix"],
-  large:   ["research", "plan", "implement", "test", "prd-review", "code-review", "review-fix", "final-review"],
+  medium:  ["research", "plan", "implement", "test", "prd-review", "code-review", "security-review", "performance-review", "review-fix"],
+  large:   ["research", "plan", "implement", "test", "prd-review", "code-review", "security-review", "performance-review", "review-fix", "final-review"],
 };
 
 const PRIORITY_ABBR: Record<string, string> = { critical: "!!", high: "hi", medium: "md", low: "lo" };
@@ -41,7 +43,8 @@ const JOB_ABBR: Record<string, string> = {
   "discovery": "discover", "progress-update": "progress",
   "ticket:research": "research", "ticket:plan": "plan", "ticket:implement": "impl",
   "ticket:test": "test", "ticket:prd-review": "prd-rev",
-  "ticket:code-review": "code-rev", "ticket:review-fix": "rev-fix", "ticket:final-review": "final",
+  "ticket:code-review": "code-rev", "ticket:security-review": "sec-rev",
+  "ticket:performance-review": "perf-rev", "ticket:review-fix": "rev-fix", "ticket:final-review": "final",
 };
 
 // Stage detail: which column to SELECT for human-readable summary
@@ -49,6 +52,7 @@ const STAGE_SUMMARY_COL: Record<string, string> = {
   research: "context_file_path", plan: "plan_file_path", implement: "what_was_done",
   test: "failing_summary",
   prd_review: "severity", code_review: "severity",
+  security_review: "severity", performance_review: "severity",
   review_fix: "summary", final_review: "reasoning",
 };
 

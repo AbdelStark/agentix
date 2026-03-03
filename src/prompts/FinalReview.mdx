@@ -41,6 +41,10 @@ TDD evidence: {props.tddEvidence ?? 'n/a'}
 ## Review Results
 PRD: severity={props.prdSeverity ?? 'n/a'}, approved={props.prdApproved ?? 'n/a'}
 Code: severity={props.codeSeverity ?? 'n/a'}, approved={props.codeApproved ?? 'n/a'}
+Security policy: severity={props.securitySeverity ?? 'n/a'}, approved={props.securityApproved ?? 'n/a'}
+{props.securityAcceptanceRationale ? `Security acceptance rationale: ${props.securityAcceptanceRationale}` : ''}
+Performance policy: severity={props.performanceSeverity ?? 'n/a'}, approved={props.performanceApproved ?? 'n/a'}
+{props.performanceAcceptanceRationale ? `Performance acceptance rationale: ${props.performanceAcceptanceRationale}` : ''}
 Issues resolved: {props.issuesResolved ?? 'n/a'}
 
 ## Decision Criteria
@@ -52,6 +56,7 @@ Set `readyToMoveOn: true` ONLY if ALL of these are met:
 - Scenario trace matrix is complete and anti-slop flags are clear
 - Domain invariants are preserved
 - Review severity is none or minor
+- Security/performance policy findings are remediated or explicitly accepted with rationale
 - Implementation is functionally complete
 
 If `readyToMoveOn: false`, explain EXACTLY what must be fixed in `reasoning` — this feeds directly back to the implementer on the next pass.

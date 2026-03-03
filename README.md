@@ -122,8 +122,8 @@ Each work unit runs through a tier-based quality pipeline inside an isolated jj 
 |------|--------|-------------|
 | **trivial** | implement → test | Config tweaks, dead code removal |
 | **small** | implement → test → code-review | Single-file behavioral changes |
-| **medium** | research → plan → implement → test → prd-review + code-review → review-fix | Multi-file features |
-| **large** | research → plan → implement → test → prd-review + code-review → review-fix → final-review | Architectural changes |
+| **medium** | research → plan → implement → test → prd-review + code-review + security-review + performance-review → review-fix | Multi-file features |
+| **large** | research → plan → implement → test → prd-review + code-review + security-review + performance-review → review-fix → final-review | Architectural changes |
 
 The tier is assigned during RFC decomposition based on complexity assessment.
 
@@ -134,9 +134,21 @@ Each work unit now carries:
 - `boundedContext` + `ubiquitousLanguage` + `domainInvariants` (DDD)
 - `gherkinFeature` + `gherkinScenarios` (BDD executable spec)
 - test-phase scenario coverage + trace proof metrics (`scenariosTotal`, `scenariosCovered`, `uncoveredScenarios`, `scenarioTrace`, `traceCompleteness`, `assertionSignals`, `antiSlopFlags`) used by merge readiness gates (TDD/BDD enforcement)
+- policy review outputs (`security_review`, `performance_review`) with structured severity, issues, remediation, and evidence
 
 Units are blocked from completion when scenario coverage is incomplete.
 Units are also blocked when trace completeness fails or blocking anti-slop flags are present.
+Medium/large units are blocked when policy severity is `high`/`critical`, and `medium` is blocked unless remediated or explicitly accepted with rationale.
+
+### Policy Configuration
+
+Repo-level policy is loaded from `agentix.policy.json` (safe defaults apply when missing/invalid):
+
+- Classes: `security`, `performance`, `operational`
+- Severity model: `none`, `low`, `medium`, `high`, `critical`
+- Default blocking:
+  - `high`/`critical`: always block
+  - `medium`: block unless fixed in review-fix or accepted with rationale
 
 ### Data Threading
 
@@ -150,6 +162,7 @@ implement.{filesCreated, filesModified, whatWasDone} → test, reviews
 test.{buildPassed, failingSummary, scenariosCovered, uncoveredScenarios} → reviews, implement (next pass), final-review
 test.{scenarioTrace, traceCompleteness, assertionSignals, antiSlopFlags} → tier gate + anti-fake-green checks + trace artifacts
 reviews.{feedback, issues} → review-fix → implement (next pass)
+policy-reviews.{issues, remediationActions, acceptanceRationale} → review-fix + tier gate
 final-review.reasoning → implement (next pass)
 evictionContext → implement (after merge conflict)
 ```
@@ -218,6 +231,8 @@ export default smithers((ctx) => (
         tester:        claudeAgent,
         prdReviewer:   claudeAgent,
         codeReviewer:  opusAgent,
+        securityReviewer: opusAgent,
+        performanceReviewer: opusAgent,
         reviewFixer:   codexAgent,
         finalReviewer: opusAgent,
         mergeQueue:    opusAgent,

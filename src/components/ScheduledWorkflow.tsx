@@ -26,6 +26,12 @@ import {
   type TraceMatrixEvaluation,
   type TraceMatrixTestResult,
 } from "../scheduled/trace-matrix";
+import {
+  DEFAULT_AGENTIX_POLICY_CONFIG,
+  evaluatePolicyGates,
+  loadAgentixPolicyConfig,
+  type AgentixPolicyConfig,
+} from "../scheduled/policy";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -122,10 +128,15 @@ export type TierGateEvaluation = {
   traceEvaluation: TraceMatrixEvaluation | null;
 };
 
+export type TierGateOptions = {
+  policyConfig?: AgentixPolicyConfig;
+};
+
 export function evaluateTierCompletion(
   ctx: SmithersCtx<ScheduledOutputs>,
   units: WorkUnit[],
   unitId: string,
+  options: TierGateOptions = {},
 ): TierGateEvaluation {
   const unit = units.find((u) => u.id === unitId);
   if (!unit) {
@@ -138,6 +149,7 @@ export function evaluateTierCompletion(
   }
 
   const tier = unit?.tier ?? "large";
+  const policyConfig = options.policyConfig ?? DEFAULT_AGENTIX_POLICY_CONFIG;
 
   // All tiers require tests to pass
   const test = ctx.latest("test", `${unitId}:test`);
@@ -223,6 +235,26 @@ export function evaluateTierCompletion(
     }
   }
 
+  const reviewFix = ctx.latest("review_fix", `${unitId}:review-fix`);
+  const policyGate = evaluatePolicyGates({
+    tier,
+    policyConfig,
+    reviewFixResolved: reviewFix?.allIssuesResolved ?? false,
+    securityReview: ctx.latest("security_review", `${unitId}:security-review`),
+    performanceReview: ctx.latest(
+      "performance_review",
+      `${unitId}:performance-review`,
+    ),
+  });
+  if (!policyGate.passed) {
+    return {
+      complete: false,
+      reason: policyGate.reason,
+      testResult: traceTestResult,
+      traceEvaluation,
+    };
+  }
+
   switch (tier) {
     case "trivial":
       return {
@@ -252,8 +284,7 @@ export function evaluateTierCompletion(
           traceEvaluation,
         };
       }
-      const rf = ctx.latest("review_fix", `${unitId}:review-fix`);
-      const resolved = rf?.allIssuesResolved ?? false;
+      const resolved = reviewFix?.allIssuesResolved ?? false;
       return {
         complete: resolved,
         reason: resolved
@@ -281,8 +312,9 @@ function tierComplete(
   ctx: SmithersCtx<ScheduledOutputs>,
   units: WorkUnit[],
   unitId: string,
+  options: TierGateOptions = {},
 ): boolean {
-  return evaluateTierCompletion(ctx, units, unitId).complete;
+  return evaluateTierCompletion(ctx, units, unitId, options).complete;
 }
 
 // ── Component ────────────────────────────────────────────────────────
@@ -299,6 +331,14 @@ export function ScheduledWorkflow({
   retries = 1,
 }: ScheduledWorkflowProps) {
   const units = workPlan.units;
+  const loadedPolicy = loadAgentixPolicyConfig(repoRoot);
+  const policyConfig = loadedPolicy.config;
+
+  if (loadedPolicy.warnings.length > 0) {
+    for (const warning of loadedPolicy.warnings) {
+      console.warn(`[agentix:policy] ${warning}`);
+    }
+  }
 
   const getMergeQueueRows = (): MergeQueueRow[] => {
     const rows = ctx.outputs("merge_queue");
@@ -401,7 +441,7 @@ export function ScheduledWorkflow({
       if (unitLandedAcrossIterations(unit.id)) continue;
       if (getUnitState(unit.id) !== "active") continue;
 
-      const gate = evaluateTierCompletion(ctx, units, unit.id);
+      const gate = evaluateTierCompletion(ctx, units, unit.id, { policyConfig });
       if (!gate.complete || !gate.testResult) continue;
 
       // If previously evicted, require fresh passing test output from this iteration.
@@ -476,6 +516,16 @@ export function ScheduledWorkflow({
       }> = [
         { key: "final_review", stage: "final-review", nodeId: `${u.id}:final-review` },
         { key: "review_fix", stage: "review-fix", nodeId: `${u.id}:review-fix` },
+        {
+          key: "performance_review",
+          stage: "performance-review",
+          nodeId: `${u.id}:performance-review`,
+        },
+        {
+          key: "security_review",
+          stage: "security-review",
+          nodeId: `${u.id}:security-review`,
+        },
         { key: "code_review", stage: "code-review", nodeId: `${u.id}:code-review` },
         { key: "prd_review", stage: "prd-review", nodeId: `${u.id}:prd-review` },
         { key: "test", stage: "test", nodeId: `${u.id}:test` },
@@ -496,7 +546,7 @@ export function ScheduledWorkflow({
       const evCtx = getEvictionContext(u.id);
       if (evCtx) reason = `Evicted from merge queue: ${evCtx.slice(0, 200)}`;
       if (state === "active" && !evCtx) {
-        const gate = evaluateTierCompletion(ctx, units, u.id);
+        const gate = evaluateTierCompletion(ctx, units, u.id, { policyConfig });
         if (!gate.complete) {
           reason = gate.reason;
         }
@@ -528,7 +578,12 @@ export function ScheduledWorkflow({
               if (state !== "active") return null;
 
               // Active + already quality-complete → skip pipeline, enters merge queue
-              if (tierComplete(ctx, units, unit.id) && !unitEvicted(unit.id)) return null;
+              if (
+                tierComplete(ctx, units, unit.id, { policyConfig }) &&
+                !unitEvicted(unit.id)
+              ) {
+                return null;
+              }
 
               return (
                 <QualityPipeline
@@ -538,6 +593,7 @@ export function ScheduledWorkflow({
                   outputs={outputs}
                   agents={agents}
                   workPlan={workPlan}
+                  policyConfig={policyConfig}
                   depSummaries={buildDepSummaries(unit)}
                   evictionContext={getEvictionContext(unit.id)}
                   pass={currentPass}

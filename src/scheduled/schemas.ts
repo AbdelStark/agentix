@@ -7,6 +7,7 @@
  */
 
 import { z } from "zod";
+import { policyReviewOutputSchema } from "./policy";
 
 const issueSchema = z.object({
   severity: z.enum(["critical", "major", "minor"]),
@@ -97,6 +98,12 @@ export const scheduledOutputSchemas = {
     feedback: z.string(),
     issues: z.array(issueSchema).nullable(),
   }),
+
+  // ── Security Review ───────────────────────────────────────────────
+  security_review: policyReviewOutputSchema,
+
+  // ── Performance Review ────────────────────────────────────────────
+  performance_review: policyReviewOutputSchema,
 
   // ── Review Fix ────────────────────────────────────────────────────
   review_fix: z.object({

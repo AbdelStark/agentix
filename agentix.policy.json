@@ -1,0 +1,42 @@
+{
+  "schemaVersion": 1,
+  "classes": {
+    "security": {
+      "enabled": true,
+      "enabledTiers": ["medium", "large"],
+      "blockOn": ["high", "critical"],
+      "blockUnlessResolvedOrAccepted": ["medium"],
+      "acceptanceRequiresRationale": true,
+      "checks": [
+        "Authn/Authz boundaries are enforced and cannot be bypassed",
+        "Input handling prevents injection in changed paths",
+        "Secrets and credentials are never logged, hardcoded, or leaked",
+        "Error responses do not leak internals or sensitive data"
+      ]
+    },
+    "performance": {
+      "enabled": true,
+      "enabledTiers": ["medium", "large"],
+      "blockOn": ["high", "critical"],
+      "blockUnlessResolvedOrAccepted": ["medium"],
+      "acceptanceRequiresRationale": true,
+      "checks": [
+        "Algorithmic complexity does not regress hot paths",
+        "I/O and query usage avoids N+1 and redundant work",
+        "New synchronous work is not added to critical request/startup paths",
+        "Caching/memoization invalidation remains bounded and correct"
+      ]
+    },
+    "operational": {
+      "enabled": false,
+      "enabledTiers": ["large"],
+      "blockOn": ["critical"],
+      "blockUnlessResolvedOrAccepted": ["high"],
+      "acceptanceRequiresRationale": true,
+      "checks": [
+        "Failure handling keeps system behavior observable and recoverable",
+        "Rollout/rollback path is documented for risky changes"
+      ]
+    }
+  }
+}

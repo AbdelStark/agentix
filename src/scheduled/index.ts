@@ -17,6 +17,27 @@ export {
 } from "./types";
 export { decomposeRFC, printPlanSummary } from "./decompose";
 export {
+  DEFAULT_AGENTIX_POLICY_CONFIG,
+  POLICY_CLASSES,
+  POLICY_SEVERITIES,
+  agentixPolicyConfigInputSchema,
+  evaluatePolicyGates,
+  getPolicyChecks,
+  loadAgentixPolicyConfig,
+  policyIssueSchema,
+  policyReviewOutputSchema,
+  policySeveritySchema,
+  type AgentixPolicyConfig,
+  type LoadedPolicyConfig,
+  type PolicyClass,
+  type PolicyClassConfig,
+  type PolicyGateDecision,
+  type PolicyGateEvaluation,
+  type PolicyReviewGateInput,
+  type PolicyReviewOutput,
+  type PolicySeverity,
+} from "./policy";
+export {
   ANTI_SLOP_FLAGS,
   evaluateTraceMatrix,
   getBlockingAntiSlopFlags,

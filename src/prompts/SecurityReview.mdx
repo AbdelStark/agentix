@@ -1,0 +1,68 @@
+SECURITY POLICY REVIEW — Unit: {props.unitId}
+
+Title: {props.unitName}
+Category: {props.unitCategory}
+Bounded context: {props.boundedContext}
+
+{props.whatWasDone ? `\n## Implementation Summary\n${props.whatWasDone}` : ""}
+{props.filesCreated && props.filesCreated.length > 0 ? `\nCreated:\n${props.filesCreated.map((f) => `- ${f}`).join("\n")}` : ""}
+{props.filesModified && props.filesModified.length > 0 ? `\nModified:\n${props.filesModified.map((f) => `- ${f}`).join("\n")}` : ""}
+
+## Verification Snapshot
+
+- Build passed: {props.buildPassed}
+- Tests passed: {props.testsPassed}
+- Scenario coverage: {props.scenariosCovered}/{props.scenariosTotal}
+
+## Domain Invariants
+
+{props.domainInvariants && props.domainInvariants.length > 0
+  ? props.domainInvariants.map((inv, i) => `${i + 1}. ${inv}`).join("\n")
+  : "None provided"}
+
+## Security Checks
+
+Review every changed file against these checks:
+
+{props.policyChecks && props.policyChecks.length > 0
+  ? props.policyChecks.map((item, i) => `${i + 1}. ${item}`).join("\n")
+  : [
+      "1. Authn/authz boundaries cannot be bypassed",
+      "2. Input handling prevents injection (SQL/command/template/path)",
+      "3. Secrets are not logged, persisted, or hardcoded",
+      "4. Error handling avoids leaking internals or sensitive data",
+    ].join("\n")}
+
+## Required Analysis
+
+At minimum, explicitly inspect:
+- Authentication and authorization boundary checks
+- Injection vectors from new input or query composition
+- Secret/credential handling and accidental exposure
+- Error payload/log leakage
+
+Flag concrete issues with file-level specificity. Do not hand-wave.
+
+## Severity Model
+
+- `none`: no security concerns found.
+- `low`: informational hardening item, non-blocking by default.
+- `medium`: real risk requiring either remediation or explicit acceptance rationale.
+- `high`: serious vulnerability that blocks merge.
+- `critical`: exploitable/unsafe condition that blocks merge.
+
+## Policy Rules
+
+- `high` and `critical` always block.
+- `medium` blocks unless fixed in review-fix or accepted with explicit rationale.
+- If `approved: true` while severity is `medium`, `acceptanceRationale` must be non-empty.
+
+## Output Contract
+
+Return fields matching schema:
+- `approved`
+- `severity`
+- `issues`: array of `{ severity, description, file, recommendation, check }`
+- `remediationActions`: concrete fix actions
+- `evidence`: concrete proof (tests, logs, commands, reasoning)
+- `acceptanceRationale`: nullable string
