@@ -20,6 +20,12 @@ import type { SmithersCtx, AgentLike } from "smithers-orchestrator";
 import type { WorkUnit, WorkPlan } from "../scheduled/types";
 import { QualityPipeline, type DepSummary, type QualityPipelineAgents, type ScheduledOutputs } from "./QualityPipeline";
 import { AgenticMergeQueue, type AgenticMergeQueueTicket } from "./AgenticMergeQueue";
+import {
+  evaluateTraceMatrix,
+  writeTraceMatrixArtifact,
+  type TraceMatrixEvaluation,
+  type TraceMatrixTestResult,
+} from "../scheduled/trace-matrix";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -66,55 +72,217 @@ type MergeQueueRow = {
 
 // ── Tier Completion ─────────────────────────────────────────────────
 
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((entry): entry is string => typeof entry === "string")
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function normalizeTraceTestResult(test: any): TraceMatrixTestResult {
+  return {
+    buildPassed: Boolean(test?.buildPassed),
+    testsPassed: Boolean(test?.testsPassed),
+    testsPassCount:
+      typeof test?.testsPassCount === "number" ? test.testsPassCount : 0,
+    testsFailCount:
+      typeof test?.testsFailCount === "number" ? test.testsFailCount : 0,
+    scenariosTotal:
+      typeof test?.scenariosTotal === "number" ? test.scenariosTotal : 0,
+    scenariosCovered:
+      typeof test?.scenariosCovered === "number" ? test.scenariosCovered : 0,
+    uncoveredScenarios: normalizeStringArray(test?.uncoveredScenarios),
+    tddEvidence: typeof test?.tddEvidence === "string" ? test.tddEvidence : "",
+    scenarioCoverageNotes:
+      typeof test?.scenarioCoverageNotes === "string"
+        ? test.scenarioCoverageNotes
+        : "",
+    failingSummary:
+      typeof test?.failingSummary === "string" ? test.failingSummary : null,
+    testOutput: typeof test?.testOutput === "string" ? test.testOutput : "",
+    scenarioTrace: Array.isArray(test?.scenarioTrace) ? test.scenarioTrace : [],
+    traceCompleteness:
+      typeof test?.traceCompleteness === "boolean"
+        ? test.traceCompleteness
+        : false,
+    assertionSignals: test?.assertionSignals ?? {
+      totalAssertions: 0,
+      filesWithAssertions: 0,
+      weakTestsDetected: false,
+    },
+    antiSlopFlags: normalizeStringArray(test?.antiSlopFlags),
+  };
+}
+
+export type TierGateEvaluation = {
+  complete: boolean;
+  reason: string;
+  testResult: TraceMatrixTestResult | null;
+  traceEvaluation: TraceMatrixEvaluation | null;
+};
+
+export function evaluateTierCompletion(
+  ctx: SmithersCtx<ScheduledOutputs>,
+  units: WorkUnit[],
+  unitId: string,
+): TierGateEvaluation {
+  const unit = units.find((u) => u.id === unitId);
+  if (!unit) {
+    return {
+      complete: false,
+      reason: `Missing work unit "${unitId}" in workflow plan`,
+      testResult: null,
+      traceEvaluation: null,
+    };
+  }
+
+  const tier = unit?.tier ?? "large";
+
+  // All tiers require tests to pass
+  const test = ctx.latest("test", `${unitId}:test`);
+  if (!test) {
+    return {
+      complete: false,
+      reason: "Missing test output",
+      testResult: null,
+      traceEvaluation: null,
+    };
+  }
+
+  const traceTestResult = normalizeTraceTestResult(test);
+
+  if (!traceTestResult.testsPassed) {
+    return {
+      complete: false,
+      reason: `Tests failing: ${traceTestResult.failingSummary ?? "unknown"}`,
+      testResult: traceTestResult,
+      traceEvaluation: null,
+    };
+  }
+  if (
+    traceTestResult.scenariosCovered < traceTestResult.scenariosTotal
+  ) {
+    return {
+      complete: false,
+      reason: `Scenario coverage incomplete: ${traceTestResult.scenariosCovered}/${traceTestResult.scenariosTotal}`,
+      testResult: traceTestResult,
+      traceEvaluation: null,
+    };
+  }
+  if (traceTestResult.uncoveredScenarios.length > 0) {
+    return {
+      complete: false,
+      reason: `Scenario coverage incomplete: ${traceTestResult.uncoveredScenarios.join(", ")}`,
+      testResult: traceTestResult,
+      traceEvaluation: null,
+    };
+  }
+
+  const impl = ctx.latest("implement", `${unitId}:implement`);
+  const traceEvaluation = evaluateTraceMatrix({
+    unit,
+    scenarioTrace: traceTestResult.scenarioTrace,
+    traceCompleteness: traceTestResult.traceCompleteness,
+    assertionSignals: traceTestResult.assertionSignals,
+    antiSlopFlags: traceTestResult.antiSlopFlags,
+    filesCreated: (impl?.filesCreated as string[] | null) ?? [],
+    filesModified: (impl?.filesModified as string[] | null) ?? [],
+    testOutput: traceTestResult.testOutput,
+  });
+
+  if (!traceEvaluation.traceCompleteness) {
+    return {
+      complete: false,
+      reason: "Scenario trace matrix is incomplete",
+      testResult: traceTestResult,
+      traceEvaluation,
+    };
+  }
+
+  if (traceEvaluation.blockingAntiSlopFlags.length > 0) {
+    return {
+      complete: false,
+      reason: `Anti-slop flags blocking merge: ${traceEvaluation.blockingAntiSlopFlags.join(", ")}`,
+      testResult: traceTestResult,
+      traceEvaluation,
+    };
+  }
+
+  // buildPassed is required unless a final_review explicitly overrides it
+  // (handles pre-existing failures in unrelated packages)
+  if (!traceTestResult.buildPassed) {
+    const fr = ctx.latest("final_review", `${unitId}:final-review`);
+    if (!fr?.readyToMoveOn) {
+      return {
+        complete: false,
+        reason: "Build gate failed without final review override",
+        testResult: traceTestResult,
+        traceEvaluation,
+      };
+    }
+  }
+
+  switch (tier) {
+    case "trivial":
+      return {
+        complete: true,
+        reason: "ready",
+        testResult: traceTestResult,
+        traceEvaluation,
+      };
+    case "small": {
+      const cr = ctx.latest("code_review", `${unitId}:code-review`);
+      const approved = cr?.approved ?? false;
+      return {
+        complete: approved,
+        reason: approved ? "ready" : "Code review not approved",
+        testResult: traceTestResult,
+        traceEvaluation,
+      };
+    }
+    case "medium": {
+      const prd = ctx.latest("prd_review", `${unitId}:prd-review`);
+      const cr = ctx.latest("code_review", `${unitId}:code-review`);
+      if ((prd?.approved ?? false) && (cr?.approved ?? false)) {
+        return {
+          complete: true,
+          reason: "ready",
+          testResult: traceTestResult,
+          traceEvaluation,
+        };
+      }
+      const rf = ctx.latest("review_fix", `${unitId}:review-fix`);
+      const resolved = rf?.allIssuesResolved ?? false;
+      return {
+        complete: resolved,
+        reason: resolved
+          ? "ready"
+          : "PRD/code review not approved and review-fix unresolved",
+        testResult: traceTestResult,
+        traceEvaluation,
+      };
+    }
+    case "large":
+    default: {
+      const fr = ctx.latest("final_review", `${unitId}:final-review`);
+      const ready = fr?.readyToMoveOn ?? false;
+      return {
+        complete: ready,
+        reason: ready ? "ready" : "Final review not ready to move on",
+        testResult: traceTestResult,
+        traceEvaluation,
+      };
+    }
+  }
+}
+
 function tierComplete(
   ctx: SmithersCtx<ScheduledOutputs>,
   units: WorkUnit[],
   unitId: string,
 ): boolean {
-  const unit = units.find((u) => u.id === unitId);
-  const tier = unit?.tier ?? "large";
-
-  // All tiers require tests to pass
-  const test = ctx.latest("test", `${unitId}:test`);
-  if (!test?.testsPassed) return false;
-  if (
-    typeof test?.scenariosTotal === "number" &&
-    typeof test?.scenariosCovered === "number" &&
-    test.scenariosCovered < test.scenariosTotal
-  ) {
-    return false;
-  }
-  if (Array.isArray(test?.uncoveredScenarios) && test.uncoveredScenarios.length > 0) {
-    return false;
-  }
-
-  // buildPassed is required unless a final_review explicitly overrides it
-  // (handles pre-existing failures in unrelated packages)
-  if (!test?.buildPassed) {
-    const fr = ctx.latest("final_review", `${unitId}:final-review`);
-    if (!fr?.readyToMoveOn) return false;
-  }
-
-  switch (tier) {
-    case "trivial":
-      return true;
-    case "small": {
-      const cr = ctx.latest("code_review", `${unitId}:code-review`);
-      return cr?.approved ?? false;
-    }
-    case "medium": {
-      const prd = ctx.latest("prd_review", `${unitId}:prd-review`);
-      const cr = ctx.latest("code_review", `${unitId}:code-review`);
-      if ((prd?.approved ?? false) && (cr?.approved ?? false)) return true;
-      const rf = ctx.latest("review_fix", `${unitId}:review-fix`);
-      return rf?.allIssuesResolved ?? false;
-    }
-    case "large":
-    default: {
-      const fr = ctx.latest("final_review", `${unitId}:final-review`);
-      return fr?.readyToMoveOn ?? false;
-    }
-  }
+  return evaluateTierCompletion(ctx, units, unitId).complete;
 }
 
 // ── Component ────────────────────────────────────────────────────────
@@ -227,43 +395,71 @@ export function ScheduledWorkflow({
   // ── Merge queue ticket builder ─────────────────────────────────
 
   function buildMergeTickets(): AgenticMergeQueueTicket[] {
-    return units
-      .filter((u) => {
-        // Only quality-complete, non-landed units
-        if (unitLandedAcrossIterations(u.id)) return false;
-        if (getUnitState(u.id) !== "active") return false;
-        if (!tierComplete(ctx, units, u.id)) return false;
+    const tickets: AgenticMergeQueueTicket[] = [];
 
-        // If previously evicted, require fresh passing tests from this iteration
-        if (unitEvicted(u.id)) {
-          const freshTest = ctx.outputMaybe("test", {
-            nodeId: `${u.id}:test`,
-            iteration: ctx.iteration,
-          });
-          if (!freshTest?.testsPassed) return false;
-          // buildPassed required unless final_review overrides (pre-existing failures)
-          if (!freshTest?.buildPassed) {
-            const fr = ctx.latest("final_review", `${u.id}:final-review`);
-            return fr?.readyToMoveOn === true;
-          }
-          return true;
-        }
-        return true;
-      })
-      .map((u) => {
-        const impl = ctx.latest("implement", `${u.id}:implement`);
-        return {
-          ticketId: u.id,
-          ticketTitle: u.name,
-          ticketCategory: u.tier,
-          priority: "medium" as const,
-          reportComplete: true,
-          landed: false,
-          filesModified: (impl?.filesModified as string[] | null) ?? [],
+    for (const unit of units) {
+      if (unitLandedAcrossIterations(unit.id)) continue;
+      if (getUnitState(unit.id) !== "active") continue;
+
+      const gate = evaluateTierCompletion(ctx, units, unit.id);
+      if (!gate.complete || !gate.testResult) continue;
+
+      // If previously evicted, require fresh passing test output from this iteration.
+      if (unitEvicted(unit.id)) {
+        const freshTest = ctx.outputMaybe("test", {
+          nodeId: `${unit.id}:test`,
+          iteration: ctx.iteration,
+        });
+        if (!freshTest?.testsPassed) continue;
+
+        const impl = ctx.latest("implement", `${unit.id}:implement`);
+        const freshTrace = evaluateTraceMatrix({
+          unit,
+          scenarioTrace: freshTest.scenarioTrace,
+          traceCompleteness: freshTest.traceCompleteness,
+          assertionSignals: freshTest.assertionSignals,
+          antiSlopFlags: freshTest.antiSlopFlags,
           filesCreated: (impl?.filesCreated as string[] | null) ?? [],
-          worktreePath: `/tmp/workflow-wt-${u.id}`,
-        };
+          filesModified: (impl?.filesModified as string[] | null) ?? [],
+          testOutput: freshTest.testOutput,
+        });
+        if (!freshTrace.traceCompleteness) continue;
+        if (freshTrace.blockingAntiSlopFlags.length > 0) continue;
+
+        // buildPassed required unless final_review overrides (pre-existing failures)
+        if (!freshTest?.buildPassed) {
+          const fr = ctx.latest("final_review", `${unit.id}:final-review`);
+          if (fr?.readyToMoveOn !== true) continue;
+        }
+      }
+
+      const impl = ctx.latest("implement", `${unit.id}:implement`);
+      const filesModified = (impl?.filesModified as string[] | null) ?? [];
+      const filesCreated = (impl?.filesCreated as string[] | null) ?? [];
+
+      // Deterministic trace artifact required for every merge-eligible unit.
+      writeTraceMatrixArtifact({
+        repoRoot,
+        unit,
+        testResult: gate.testResult,
+        filesCreated,
+        filesModified,
       });
+
+      tickets.push({
+        ticketId: unit.id,
+        ticketTitle: unit.name,
+        ticketCategory: unit.tier,
+        priority: "medium" as const,
+        reportComplete: true,
+        landed: false,
+        filesModified,
+        filesCreated,
+        worktreePath: `/tmp/workflow-wt-${unit.id}`,
+      });
+    }
+
+    return tickets;
   }
 
   // ── Completion report data ─────────────────────────────────────
@@ -299,16 +495,11 @@ export function ScheduledWorkflow({
         : `Did not complete within ${maxPasses} passes`;
       const evCtx = getEvictionContext(u.id);
       if (evCtx) reason = `Evicted from merge queue: ${evCtx.slice(0, 200)}`;
-      const testOut = ctx.latest("test", `${u.id}:test`);
-      if (testOut && !testOut.testsPassed) {
-        reason = `Tests failing: ${testOut.failingSummary ?? "unknown"}`;
-      }
-      if (
-        testOut &&
-        Array.isArray(testOut.uncoveredScenarios) &&
-        testOut.uncoveredScenarios.length > 0
-      ) {
-        reason = `Scenario coverage incomplete: ${testOut.uncoveredScenarios.join(", ")}`;
+      if (state === "active" && !evCtx) {
+        const gate = evaluateTierCompletion(ctx, units, u.id);
+        if (!gate.complete) {
+          reason = gate.reason;
+        }
       }
       return { unitId: u.id, lastStage, reason };
     });
