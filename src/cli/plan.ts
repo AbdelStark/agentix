@@ -9,21 +9,38 @@ import { existsSync } from "node:fs";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { getAgentixDir, scanRepo, type ParsedArgs } from "./shared";
+import { getAgentixDir, scanRepo as scanRepoDefault, type ParsedArgs, type RepoConfig } from "./shared";
 import { appendAgentixEvent } from "./events";
-import { decomposeRFC, printPlanSummary } from "../scheduled/decompose";
+import {
+  decomposeRFC as decomposeRFCDefault,
+  printPlanSummary,
+} from "../scheduled/decompose";
 import { agentixConfigSchema, type AgentixConfig } from "../scheduled/types";
+import type { DecomposeAdapter, ExitAdapter } from "./adapters";
+
+type PlanDeps = {
+  scanRepo?: (repoRoot: string) => Promise<RepoConfig>;
+  decomposeRFC?: DecomposeAdapter;
+  appendAgentixEvent?: typeof appendAgentixEvent;
+  exit?: ExitAdapter;
+};
 
 export async function runPlan(opts: {
   flags: ParsedArgs["flags"];
   repoRoot: string;
+  deps?: PlanDeps;
 }): Promise<void> {
-  const { repoRoot } = opts;
+  const { repoRoot, deps } = opts;
+  const scanRepo = deps?.scanRepo ?? scanRepoDefault;
+  const decomposeRFC = deps?.decomposeRFC ?? decomposeRFCDefault;
+  const appendEvent = deps?.appendAgentixEvent ?? appendAgentixEvent;
+  const exit: ExitAdapter =
+    deps?.exit ?? ((code: number) => process.exit(code));
   const agentixDir = getAgentixDir(repoRoot);
   const configPath = join(agentixDir, "config.json");
   const startedAt = Date.now();
 
-  await appendAgentixEvent(agentixDir, {
+  await appendEvent(agentixDir, {
     level: "info",
     event: "command.started",
     command: "plan",
@@ -35,13 +52,13 @@ export async function runPlan(opts: {
       console.error(
         "Error: No agentix config found. Run `agentix init ./rfc.md` first.",
       );
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "error",
         event: "command.failed",
         command: "plan",
         details: { reason: "missing-config" },
       });
-      process.exit(1);
+      exit(1);
     }
 
     const config: AgentixConfig = agentixConfigSchema.parse(
@@ -52,18 +69,18 @@ export async function runPlan(opts: {
       console.error(
         "Error: `agentix plan` only works in scheduled-work mode.",
       );
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "error",
         event: "command.failed",
         command: "plan",
         details: { reason: "unsupported-mode", mode: config.mode },
       });
-      process.exit(1);
+      exit(1);
     }
 
     if (!config.rfcPath || !existsSync(config.rfcPath)) {
       console.error(`Error: RFC file not found: ${config.rfcPath}`);
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "error",
         event: "command.failed",
         command: "plan",
@@ -72,7 +89,7 @@ export async function runPlan(opts: {
           rfcPath: config.rfcPath ?? null,
         },
       });
-      process.exit(1);
+      exit(1);
     }
 
     console.log("🗂️  agentix plan — Regenerating work plan\n");
@@ -92,7 +109,7 @@ export async function runPlan(opts: {
     console.log(`  Updated: ${planPath}`);
     console.log();
 
-    await appendAgentixEvent(agentixDir, {
+    await appendEvent(agentixDir, {
       level: "info",
       event: "command.completed",
       command: "plan",
@@ -104,7 +121,7 @@ export async function runPlan(opts: {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await appendAgentixEvent(agentixDir, {
+    await appendEvent(agentixDir, {
       level: "error",
       event: "command.failed",
       command: "plan",

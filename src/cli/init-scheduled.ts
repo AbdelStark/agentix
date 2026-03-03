@@ -14,29 +14,61 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 
 import {
-  detectAgents,
-  detectCurrentBranch,
-  ensureJjColocated,
+  detectAgents as detectAgentsDefault,
+  detectCurrentBranch as detectCurrentBranchDefault,
+  ensureJjColocated as ensureJjColocatedDefault,
   getAgentixDir,
   agentixSourceRoot,
-  scanRepo,
+  scanRepo as scanRepoDefault,
+  type RepoConfig,
   type ParsedArgs,
 } from "./shared";
 import { appendAgentixEvent } from "./events";
-import { decomposeRFC, printPlanSummary } from "../scheduled/decompose";
+import {
+  decomposeRFC as decomposeRFCDefault,
+  printPlanSummary,
+} from "../scheduled/decompose";
 import type { AgentixConfig } from "../scheduled/types";
-import { renderScheduledWorkflow } from "./render-scheduled-workflow";
+import { renderScheduledWorkflow as renderScheduledWorkflowDefault } from "./render-scheduled-workflow";
+import type {
+  AgentDetectionAdapter,
+  DecomposeAdapter,
+  ExitAdapter,
+} from "./adapters";
+
+type InitScheduledDeps = {
+  detectAgents?: AgentDetectionAdapter;
+  decomposeRFC?: DecomposeAdapter;
+  ensureJjColocated?: (repoRoot: string) => Promise<void>;
+  scanRepo?: (repoRoot: string) => Promise<RepoConfig>;
+  detectCurrentBranch?: (repoRoot: string) => Promise<string>;
+  appendAgentixEvent?: typeof appendAgentixEvent;
+  renderScheduledWorkflow?: typeof renderScheduledWorkflowDefault;
+  exit?: ExitAdapter;
+};
 
 export async function initScheduledWork(opts: {
   positional: string[];
   flags: ParsedArgs["flags"];
   repoRoot: string;
+  deps?: InitScheduledDeps;
 }): Promise<void> {
-  const { positional, flags, repoRoot } = opts;
+  const { positional, flags, repoRoot, deps } = opts;
+  const appendEvent = deps?.appendAgentixEvent ?? appendAgentixEvent;
+  const detectAgents = deps?.detectAgents ?? detectAgentsDefault;
+  const decomposeRFC = deps?.decomposeRFC ?? decomposeRFCDefault;
+  const ensureJjColocated = deps?.ensureJjColocated ?? ensureJjColocatedDefault;
+  const scanRepo = deps?.scanRepo ?? scanRepoDefault;
+  const detectCurrentBranch =
+    deps?.detectCurrentBranch ?? detectCurrentBranchDefault;
+  const renderScheduledWorkflow =
+    deps?.renderScheduledWorkflow ?? renderScheduledWorkflowDefault;
+  const exit: ExitAdapter =
+    deps?.exit ?? ((code: number) => process.exit(code));
   const agentixDir = getAgentixDir(repoRoot);
   const startedAt = Date.now();
 
-  await appendAgentixEvent(agentixDir, {
+  await appendEvent(agentixDir, {
     level: "info",
     event: "command.started",
     command: "init",
@@ -54,25 +86,25 @@ export async function initScheduledWork(opts: {
     if (!rfcArg) {
       console.error("Error: RFC file path is required.");
       console.error("Usage: agentix init ./path/to/rfc.md");
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "error",
         event: "command.failed",
         command: "init",
         details: { reason: "missing-rfc-path" },
       });
-      process.exit(1);
+      exit(1);
     }
 
     const rfcPath = resolve(repoRoot, rfcArg);
     if (!existsSync(rfcPath)) {
       console.error(`Error: RFC file not found: ${rfcPath}`);
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "error",
         event: "command.failed",
         command: "init",
         details: { reason: "rfc-not-found", rfcPath },
       });
-      process.exit(1);
+      exit(1);
     }
 
     const rfcContent = await readFile(rfcPath, "utf8");
@@ -108,13 +140,13 @@ export async function initScheduledWork(opts: {
       console.error(
         "\nError: No supported agent CLI detected. Install claude and/or codex.",
       );
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "error",
         event: "command.failed",
         command: "init",
         details: { reason: "no-supported-agents" },
       });
-      process.exit(1);
+      exit(1);
     }
 
     // ── Decompose RFC ───────────────────────────────────────────────────
@@ -186,7 +218,7 @@ export async function initScheduledWork(opts: {
     console.log(`    agentix run`);
     console.log();
 
-    await appendAgentixEvent(agentixDir, {
+    await appendEvent(agentixDir, {
       level: "info",
       event: "command.completed",
       command: "init",
@@ -204,7 +236,7 @@ export async function initScheduledWork(opts: {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await appendAgentixEvent(agentixDir, {
+    await appendEvent(agentixDir, {
       level: "error",
       event: "command.failed",
       command: "init",

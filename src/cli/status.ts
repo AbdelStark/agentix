@@ -9,14 +9,25 @@ import { join } from "node:path";
 import { getAgentixDir } from "./shared";
 import { appendAgentixEvent } from "./events";
 import { agentixConfigSchema } from "../scheduled/types";
+import type { LatestRunIdAdapter } from "./adapters";
 
-export async function runStatus(opts: { repoRoot: string }): Promise<void> {
-  const { repoRoot } = opts;
+type StatusDeps = {
+  getLatestRunId?: LatestRunIdAdapter;
+  appendAgentixEvent?: typeof appendAgentixEvent;
+};
+
+export async function runStatus(opts: {
+  repoRoot: string;
+  deps?: StatusDeps;
+}): Promise<void> {
+  const { repoRoot, deps } = opts;
+  const appendEvent = deps?.appendAgentixEvent ?? appendAgentixEvent;
+  const getLatestRunId = deps?.getLatestRunId ?? getLatestRunIdFromDb;
   const agentixDir = getAgentixDir(repoRoot);
   const configPath = join(agentixDir, "config.json");
   const startedAt = Date.now();
 
-  await appendAgentixEvent(agentixDir, {
+  await appendEvent(agentixDir, {
     level: "info",
     event: "command.started",
     command: "status",
@@ -27,7 +38,7 @@ export async function runStatus(opts: { repoRoot: string }): Promise<void> {
     if (!existsSync(configPath)) {
       console.log("No agentix workflow initialized in this directory.\n");
       console.log("Run `agentix init` to get started.");
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "info",
         event: "command.completed",
         command: "status",
@@ -67,7 +78,7 @@ export async function runStatus(opts: { repoRoot: string }): Promise<void> {
     let latestRunId: string | null = null;
     const dbPath = join(agentixDir, "workflow.db");
     if (existsSync(dbPath)) {
-      latestRunId = getLatestRunId(dbPath);
+      latestRunId = await getLatestRunId(dbPath);
       if (latestRunId) {
         console.log(`  Latest run: ${latestRunId}`);
       }
@@ -81,7 +92,7 @@ export async function runStatus(opts: { repoRoot: string }): Promise<void> {
 
     console.log();
 
-    await appendAgentixEvent(agentixDir, {
+    await appendEvent(agentixDir, {
       level: "info",
       event: "command.completed",
       command: "status",
@@ -95,7 +106,7 @@ export async function runStatus(opts: { repoRoot: string }): Promise<void> {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await appendAgentixEvent(agentixDir, {
+    await appendEvent(agentixDir, {
       level: "error",
       event: "command.failed",
       command: "status",
@@ -108,7 +119,7 @@ export async function runStatus(opts: { repoRoot: string }): Promise<void> {
   }
 }
 
-function getLatestRunId(dbPath: string): string | null {
+async function getLatestRunIdFromDb(dbPath: string): Promise<string | null> {
   try {
     const { Database } = require("bun:sqlite");
     const db = new Database(dbPath, { readonly: true });

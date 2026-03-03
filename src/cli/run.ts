@@ -11,14 +11,31 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 
 import {
-  findSmithersCliPath,
+  findSmithersCliPath as findSmithersCliPathDefault,
   getAgentixDir,
-  launchSmithers,
-  promptChoice,
+  launchSmithers as launchSmithersDefault,
+  promptChoice as promptChoiceDefault,
   type ParsedArgs,
 } from "./shared";
 import { appendAgentixEvent } from "./events";
 import { agentixConfigSchema, type AgentixConfig } from "../scheduled/types";
+import type {
+  ExitAdapter,
+  LaunchAdapter,
+  LatestRunIdAdapter,
+  PromptAdapter,
+  RunIdAdapter,
+} from "./adapters";
+
+type RunWorkflowDeps = {
+  findSmithersCliPath?: (repoRoot: string) => string | null;
+  launchSmithers?: LaunchAdapter;
+  promptChoice?: PromptAdapter;
+  appendAgentixEvent?: typeof appendAgentixEvent;
+  getLatestRunId?: LatestRunIdAdapter;
+  createRunId?: RunIdAdapter;
+  exit?: ExitAdapter;
+};
 
 class WorkflowExitError extends Error {
   readonly exitCode: number;
@@ -32,8 +49,18 @@ class WorkflowExitError extends Error {
 export async function runWorkflow(opts: {
   flags: ParsedArgs["flags"];
   repoRoot: string;
+  deps?: RunWorkflowDeps;
 }): Promise<void> {
-  const { flags, repoRoot } = opts;
+  const { flags, repoRoot, deps } = opts;
+  const findSmithersCliPath =
+    deps?.findSmithersCliPath ?? findSmithersCliPathDefault;
+  const launchSmithers = deps?.launchSmithers ?? launchSmithersDefault;
+  const promptChoice = deps?.promptChoice ?? promptChoiceDefault;
+  const appendEvent = deps?.appendAgentixEvent ?? appendAgentixEvent;
+  const getLatestRunId = deps?.getLatestRunId ?? getLatestRunIdFromDb;
+  const createRunId = deps?.createRunId ?? defaultRunId;
+  const exit: ExitAdapter =
+    deps?.exit ?? ((code: number) => process.exit(code));
   const agentixDir = getAgentixDir(repoRoot);
   const configPath = join(agentixDir, "config.json");
   const startedAt = Date.now();
@@ -42,7 +69,7 @@ export async function runWorkflow(opts: {
     typeof flags.resume === "string" ? flags.resume : null;
   let activeRunId: string | undefined = resumeRunId ?? undefined;
 
-  await appendAgentixEvent(agentixDir, {
+  await appendEvent(agentixDir, {
     level: "info",
     event: "command.started",
     command: "run",
@@ -58,13 +85,13 @@ export async function runWorkflow(opts: {
       console.error(
         "Error: No workflow initialized. Run `agentix init` first.",
       );
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "error",
         event: "command.failed",
         command: "run",
         details: { reason: "missing-config" },
       });
-      process.exit(1);
+      exit(1);
     }
 
     const config: AgentixConfig = agentixConfigSchema.parse(
@@ -77,13 +104,13 @@ export async function runWorkflow(opts: {
       console.error(
         "Error: Could not find smithers CLI. Install smithers-orchestrator:\n  bun add smithers-orchestrator",
       );
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "error",
         event: "command.failed",
         command: "run",
         details: { reason: "missing-smithers-cli" },
       });
-      process.exit(1);
+      exit(1);
     }
 
     const maxConcurrency =
@@ -97,13 +124,13 @@ export async function runWorkflow(opts: {
       console.error(
         "Error: No work plan found. Run `agentix plan` or `agentix init` first.",
       );
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "error",
         event: "command.failed",
         command: "run",
         details: { reason: "missing-work-plan" },
       });
-      process.exit(1);
+      exit(1);
     }
 
     const dbPath = join(agentixDir, "workflow.db");
@@ -114,26 +141,26 @@ export async function runWorkflow(opts: {
       console.error(
         "Error: No workflow file found. Run `agentix init` first.",
       );
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "error",
         event: "command.failed",
         command: "run",
         details: { reason: "missing-workflow-file" },
       });
-      process.exit(1);
+      exit(1);
     }
 
     // ── Resume path ─────────────────────────────────────────────────────
     if (resumeRunId) {
       if (!existsSync(dbPath)) {
         console.error("Error: No database found. Cannot resume.");
-        await appendAgentixEvent(agentixDir, {
+        await appendEvent(agentixDir, {
           level: "error",
           event: "command.failed",
           command: "run",
           details: { reason: "missing-db-for-resume", resumeRunId },
         });
-        process.exit(1);
+        exit(1);
       }
 
       const exitCode = await launchAndReport({
@@ -144,8 +171,9 @@ export async function runWorkflow(opts: {
         maxConcurrency,
         smithersCliPath,
         label: "Scheduled Work (resume)",
+        launchSmithers,
       });
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "info",
         event: "command.completed",
         command: "run",
@@ -162,7 +190,7 @@ export async function runWorkflow(opts: {
 
     // ── Check for existing run ──────────────────────────────────────────
     if (existsSync(workflowPath) && existsSync(dbPath)) {
-      const latestRunId = getLatestRunId(dbPath);
+      const latestRunId = await getLatestRunId(dbPath);
 
       console.log("Found an existing scheduled-work run.\n");
       const options = [
@@ -185,8 +213,9 @@ export async function runWorkflow(opts: {
           maxConcurrency,
           smithersCliPath,
           label: "Scheduled Work (resume)",
+          launchSmithers,
         });
-        await appendAgentixEvent(agentixDir, {
+        await appendEvent(agentixDir, {
           level: "info",
           event: "command.completed",
           command: "run",
@@ -204,7 +233,7 @@ export async function runWorkflow(opts: {
         (choice === 2 && latestRunId) ||
         (choice === 1 && !latestRunId)
       ) {
-        await appendAgentixEvent(agentixDir, {
+        await appendEvent(agentixDir, {
           level: "info",
           event: "command.cancelled",
           command: "run",
@@ -213,7 +242,7 @@ export async function runWorkflow(opts: {
             durationMs: Date.now() - startedAt,
           },
         });
-        process.exit(0);
+        exit(0);
       }
       // choice 0: fall through to fresh run
     }
@@ -234,7 +263,7 @@ export async function runWorkflow(opts: {
     );
     if (confirmChoice !== 0) {
       console.log("Cancelled.\n");
-      await appendAgentixEvent(agentixDir, {
+      await appendEvent(agentixDir, {
         level: "info",
         event: "command.cancelled",
         command: "run",
@@ -243,10 +272,10 @@ export async function runWorkflow(opts: {
           durationMs: Date.now() - startedAt,
         },
       });
-      process.exit(0);
+      exit(0);
     }
 
-    const runId = `sw-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+    const runId = createRunId();
     activeRunId = runId;
 
     const exitCode = await launchAndReport({
@@ -257,8 +286,9 @@ export async function runWorkflow(opts: {
       maxConcurrency,
       smithersCliPath,
       label: "Scheduled Work",
+      launchSmithers,
     });
-    await appendAgentixEvent(agentixDir, {
+    await appendEvent(agentixDir, {
       level: "info",
       event: "command.completed",
       command: "run",
@@ -273,7 +303,7 @@ export async function runWorkflow(opts: {
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await appendAgentixEvent(agentixDir, {
+    await appendEvent(agentixDir, {
       level: "error",
       event: "command.failed",
       command: "run",
@@ -284,7 +314,7 @@ export async function runWorkflow(opts: {
       },
     });
     if (error instanceof WorkflowExitError) {
-      process.exit(error.exitCode);
+      exit(error.exitCode);
     }
     throw error;
   }
@@ -300,8 +330,9 @@ async function launchAndReport(opts: {
   maxConcurrency: number;
   smithersCliPath: string;
   label: string;
+  launchSmithers: LaunchAdapter;
 }): Promise<number> {
-  const { label, ...launchOpts } = opts;
+  const { label, launchSmithers, ...launchOpts } = opts;
 
   console.log(`🎬 ${label} — Starting execution...`);
   console.log(`  Run ID: ${launchOpts.runId}\n`);
@@ -319,7 +350,11 @@ function reportExit(exitCode: number, label: string): void {
   }
 }
 
-function getLatestRunId(dbPath: string): string | null {
+function defaultRunId(): string {
+  return `sw-${Date.now().toString(36)}-${randomUUID().slice(0, 8)}`;
+}
+
+async function getLatestRunIdFromDb(dbPath: string): Promise<string | null> {
   try {
     const { Database } = require("bun:sqlite");
     const db = new Database(dbPath, { readonly: true });

@@ -48,6 +48,7 @@
     "gen:mdx-types": "bun scripts/gen-mdx-types.ts",
     "typecheck": "bun scripts/gen-mdx-types.ts && tsc --noEmit",
     "test": "bun test",
+    "test:integration": "bun test src/cli/integration",
     "check": "bun run typecheck && bun test",
     "release:check": "bun scripts/release-check.ts",
     "cli": "bun run src/cli/agentix.ts"
