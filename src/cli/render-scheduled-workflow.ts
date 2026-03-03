@@ -112,6 +112,7 @@ const agents = {
   codeReviewer:  chooseAgent("opus",   "Code Reviewer — Enforce production-grade quality and maintainability"),
   securityReviewer: chooseAgent("opus", "Security Reviewer — Enforce policy-level security controls and severity blocking"),
   performanceReviewer: chooseAgent("opus", "Performance Reviewer — Enforce policy-level performance constraints and hot-path safety"),
+  operationalReviewer: chooseAgent("opus", "Operational Reviewer — Enforce operational readiness, rollback safety, and resilience policy"),
   reviewFixer:   chooseAgent("codex",  "ReviewFixer — Fix issues found in code review"),
   finalReviewer: chooseAgent("opus",   "Final Reviewer — Gate merge readiness with zero-slop standards"),
   mergeQueue:    chooseAgent("opus",   "MergeQueue Coordinator — Rebase and land unit branches onto main"),

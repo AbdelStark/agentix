@@ -16,13 +16,15 @@ Use this checklist before tagging a release.
 - [ ] Scenario coverage gate is active (`scenariosCovered === scenariosTotal`)
 - [ ] Merge queue readiness still blocks uncovered scenarios
 - [ ] Test output contract includes trace matrix fields (`scenarioTrace`, `traceCompleteness`, `assertionSignals`, `antiSlopFlags`)
-- [ ] Policy review schemas are present and validated (`security_review`, `performance_review`)
+- [ ] Policy review schemas are present and validated (`security_review`, `performance_review`, `operational_review`)
+- [ ] Policy status schema is present and validated (`policy_status`)
 - [ ] Tier gate blocks when `traceCompleteness !== true`
 - [ ] Tier gate blocks on blocking anti-slop flags
 - [ ] Medium/large tier gate blocks `high`/`critical` policy severity
 - [ ] Medium severity policy findings require remediation or explicit acceptance rationale
 - [ ] Trace artifacts are generated for merge-eligible units at `.agentix/generated/traces/<unit-id>.json`
 - [ ] `agentix.policy.json` exists (or defaults are intentionally relied on) and thresholds are reviewed
+- [ ] Policy parse/config warnings are captured in structured output and visible in monitor UI
 
 ## Runtime Safety
 

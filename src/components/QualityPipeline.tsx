@@ -4,7 +4,7 @@ import type { SmithersCtx, AgentLike } from "smithers-orchestrator";
 import { SCHEDULED_TIERS, type WorkUnit, type WorkPlan } from "../scheduled/types";
 import { scheduledOutputSchemas } from "../scheduled/schemas";
 import type { AgentixPolicyConfig, PolicyReviewOutput } from "../scheduled/policy";
-import { getPolicyChecks } from "../scheduled/policy";
+import { getPolicyChecks, isPolicyClassEnabledForTier } from "../scheduled/policy";
 
 import ResearchPrompt from "../prompts/Research.mdx";
 import PlanPrompt from "../prompts/Plan.mdx";
@@ -14,6 +14,7 @@ import PrdReviewPrompt from "../prompts/PrdReview.mdx";
 import CodeReviewPrompt from "../prompts/CodeReview.mdx";
 import SecurityReviewPrompt from "../prompts/SecurityReview.mdx";
 import PerformanceReviewPrompt from "../prompts/PerformanceReview.mdx";
+import OperationalReviewPrompt from "../prompts/OperationalReview.mdx";
 import ReviewFixPrompt from "../prompts/ReviewFix.mdx";
 import FinalReviewPrompt from "../prompts/FinalReview.mdx";
 
@@ -35,6 +36,7 @@ export type QualityPipelineAgents = {
   codeReviewer: AgentLike | AgentLike[];
   securityReviewer: AgentLike | AgentLike[];
   performanceReviewer: AgentLike | AgentLike[];
+  operationalReviewer: AgentLike | AgentLike[];
   reviewFixer: AgentLike | AgentLike[];
   finalReviewer: AgentLike | AgentLike[];
 };
@@ -173,8 +175,23 @@ export function QualityPipeline({
     "performance_review",
     `${uid}:performance-review`,
   );
+  const operationalReview = ctx.latest(
+    "operational_review",
+    `${uid}:operational-review`,
+  );
   const reviewFix = ctx.latest("review_fix", `${uid}:review-fix`);
   const finalReview = ctx.latest("final_review", `${uid}:final-review`);
+
+  const policyTier = tier;
+  const runSecurityReview =
+    tierHasStep(tier, "security-review") &&
+    isPolicyClassEnabledForTier(policyConfig, "security", policyTier);
+  const runPerformanceReview =
+    tierHasStep(tier, "performance-review") &&
+    isPolicyClassEnabledForTier(policyConfig, "performance", policyTier);
+  const runOperationalReview =
+    tierHasStep(tier, "operational-review") &&
+    isPolicyClassEnabledForTier(policyConfig, "operational", policyTier);
 
   const combinedReviewFeedback = buildReviewFeedback([
     finalReview?.reasoning ? `Final review feedback:\n${finalReview.reasoning}` : null,
@@ -182,10 +199,12 @@ export function QualityPipeline({
     codeReview?.feedback ? `Code review feedback:\n${codeReview.feedback}` : null,
     formatPolicyFeedback("Security", securityReview),
     formatPolicyFeedback("Performance", performanceReview),
+    formatPolicyFeedback("Operational", operationalReview),
   ]);
 
   const securityChecks = getPolicyChecks(policyConfig, "security");
   const performanceChecks = getPolicyChecks(policyConfig, "performance");
+  const operationalChecks = getPolicyChecks(policyConfig, "operational");
 
   const verifyCommands = [
     ...Object.values(workPlan.repo.buildCmds),
@@ -197,11 +216,14 @@ export function QualityPipeline({
   const bothApproved =
     (prdReview?.approved ?? !tierHasStep(tier, "prd-review")) &&
     (codeReview?.approved ?? false) &&
-    (tierHasStep(tier, "security-review")
+    (runSecurityReview
       ? isPolicyReviewResolvedForFixSkip(securityReview)
       : true) &&
-    (tierHasStep(tier, "performance-review")
+    (runPerformanceReview
       ? isPolicyReviewResolvedForFixSkip(performanceReview)
+      : true) &&
+    (runOperationalReview
+      ? isPolicyReviewResolvedForFixSkip(operationalReview)
       : true);
 
   return (
@@ -397,7 +419,7 @@ export function QualityPipeline({
               />
             </Task>
           )}
-          {tierHasStep(tier, "security-review") && (
+          {runSecurityReview && (
             <Task
               id={`${uid}:security-review`}
               output={outputs.security_review}
@@ -422,7 +444,7 @@ export function QualityPipeline({
               />
             </Task>
           )}
-          {tierHasStep(tier, "performance-review") && (
+          {runPerformanceReview && (
             <Task
               id={`${uid}:performance-review`}
               output={outputs.performance_review}
@@ -444,6 +466,31 @@ export function QualityPipeline({
                 scenariosCovered={test?.scenariosCovered ?? 0}
                 scenariosTotal={test?.scenariosTotal ?? unit.gherkinScenarios.length}
                 policyChecks={performanceChecks}
+              />
+            </Task>
+          )}
+          {runOperationalReview && (
+            <Task
+              id={`${uid}:operational-review`}
+              output={outputs.operational_review}
+              agent={agents.operationalReviewer}
+              retries={retries}
+              continueOnFail
+            >
+              <OperationalReviewPrompt
+                unitId={uid}
+                unitName={unit.name}
+                unitCategory={tier}
+                boundedContext={unit.boundedContext}
+                domainInvariants={unit.domainInvariants}
+                whatWasDone={impl?.whatWasDone ?? "Unknown"}
+                filesCreated={impl?.filesCreated ?? []}
+                filesModified={impl?.filesModified ?? []}
+                buildPassed={test?.buildPassed ?? false}
+                testsPassed={test?.testsPassed ?? false}
+                scenariosCovered={test?.scenariosCovered ?? 0}
+                scenariosTotal={test?.scenariosTotal ?? unit.gherkinScenarios.length}
+                policyChecks={operationalChecks}
               />
             </Task>
           )}
@@ -475,6 +522,10 @@ export function QualityPipeline({
               performanceIssues={buildIssueList(performanceReview?.issues)}
               performanceRemediationActions={performanceReview?.remediationActions ?? []}
               performanceAcceptanceRationale={performanceReview?.acceptanceRationale ?? null}
+              operationalSeverity={operationalReview?.severity ?? "none"}
+              operationalIssues={buildIssueList(operationalReview?.issues)}
+              operationalRemediationActions={operationalReview?.remediationActions ?? []}
+              operationalAcceptanceRationale={operationalReview?.acceptanceRationale ?? null}
               validationCommands={verifyCommands}
               commitPrefix="fix"
               emojiPrefixes="fix, refactor, test"
@@ -523,6 +574,9 @@ export function QualityPipeline({
               performanceSeverity={performanceReview?.severity ?? null}
               performanceApproved={performanceReview?.approved ?? null}
               performanceAcceptanceRationale={performanceReview?.acceptanceRationale ?? null}
+              operationalSeverity={operationalReview?.severity ?? null}
+              operationalApproved={operationalReview?.approved ?? null}
+              operationalAcceptanceRationale={operationalReview?.acceptanceRationale ?? null}
               issuesResolved={reviewFix?.allIssuesResolved ?? null}
             />
           </Task>

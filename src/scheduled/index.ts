@@ -23,6 +23,7 @@ export {
   agentixPolicyConfigInputSchema,
   evaluatePolicyGates,
   getPolicyChecks,
+  isPolicyClassEnabledForTier,
   loadAgentixPolicyConfig,
   policyIssueSchema,
   policyReviewOutputSchema,

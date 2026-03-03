@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { SmithersCtx } from "smithers-orchestrator";
 import type { WorkUnit } from "../../scheduled/types";
+import { DEFAULT_AGENTIX_POLICY_CONFIG } from "../../scheduled/policy";
+import type { AgentixPolicyConfig } from "../../scheduled/policy";
 import type { ScheduledOutputs } from "../QualityPipeline";
 import { evaluateTierCompletion } from "../ScheduledWorkflow";
 
@@ -257,5 +259,43 @@ describe("evaluateTierCompletion trace gates", () => {
     expect(result.complete).toBe(false);
     expect(result.reason).toContain("performance");
     expect(result.reason).toContain("critical");
+  });
+
+  test("blocks large tier when operational policy is enabled and review is missing", () => {
+    const unit = mkUnit({ tier: "large" });
+    const policyConfig: AgentixPolicyConfig = {
+      ...DEFAULT_AGENTIX_POLICY_CONFIG,
+      classes: {
+        ...DEFAULT_AGENTIX_POLICY_CONFIG.classes,
+        operational: {
+          ...DEFAULT_AGENTIX_POLICY_CONFIG.classes.operational,
+          enabled: true,
+          enabledTiers: ["large"],
+          blockOn: ["high", "critical"],
+          blockUnlessResolvedOrAccepted: ["medium"],
+        },
+      },
+    };
+
+    const ctx = mkCtx({
+      "test:unit-a:test": mkTestOutput(),
+      "implement:unit-a:implement": {
+        filesCreated: ["src/unit-a.ts", "src/unit-a.test.ts"],
+        filesModified: [],
+      },
+      "final_review:unit-a:final-review": {
+        readyToMoveOn: true,
+      },
+      "review_fix:unit-a:review-fix": {
+        allIssuesResolved: true,
+      },
+      "security_review:unit-a:security-review": mkPolicyReview(),
+      "performance_review:unit-a:performance-review": mkPolicyReview(),
+    });
+
+    const result = evaluateTierCompletion(ctx, [unit], unit.id, { policyConfig });
+    expect(result.complete).toBe(false);
+    expect(result.reason).toContain("operational");
+    expect(result.reason).toContain("Missing");
   });
 });

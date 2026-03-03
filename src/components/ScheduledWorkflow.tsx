@@ -28,6 +28,7 @@ import {
 } from "../scheduled/trace-matrix";
 import {
   DEFAULT_AGENTIX_POLICY_CONFIG,
+  POLICY_CLASSES,
   evaluatePolicyGates,
   loadAgentixPolicyConfig,
   type AgentixPolicyConfig,
@@ -245,6 +246,10 @@ export function evaluateTierCompletion(
       "performance_review",
       `${unitId}:performance-review`,
     ),
+    operationalReview: ctx.latest(
+      "operational_review",
+      `${unitId}:operational-review`,
+    ),
   });
   if (!policyGate.passed) {
     return {
@@ -333,12 +338,13 @@ export function ScheduledWorkflow({
   const units = workPlan.units;
   const loadedPolicy = loadAgentixPolicyConfig(repoRoot);
   const policyConfig = loadedPolicy.config;
-
-  if (loadedPolicy.warnings.length > 0) {
-    for (const warning of loadedPolicy.warnings) {
-      console.warn(`[agentix:policy] ${warning}`);
-    }
-  }
+  const policyWarningCount = loadedPolicy.warnings.length;
+  const policyStatusSummary =
+    policyWarningCount > 0
+      ? `Policy config loaded with ${policyWarningCount} warning(s).`
+      : loadedPolicy.found
+        ? "Policy config loaded successfully."
+        : "Policy config not found; using safe defaults.";
 
   const getMergeQueueRows = (): MergeQueueRow[] => {
     const rows = ctx.outputs("merge_queue");
@@ -526,6 +532,11 @@ export function ScheduledWorkflow({
           stage: "security-review",
           nodeId: `${u.id}:security-review`,
         },
+        {
+          key: "operational_review",
+          stage: "operational-review",
+          nodeId: `${u.id}:operational-review`,
+        },
         { key: "code_review", stage: "code-review", nodeId: `${u.id}:code-review` },
         { key: "prd_review", stage: "prd-review", nodeId: `${u.id}:prd-review` },
         { key: "test", stage: "test", nodeId: `${u.id}:test` },
@@ -560,9 +571,38 @@ export function ScheduledWorkflow({
     Object.values(workPlan.repo.testCmds).join(" && ") || "none configured";
 
   const mergeTickets = buildMergeTickets();
+  const policyWarningSteps =
+    policyWarningCount > 0
+      ? [
+          `Policy config warnings detected (${policyWarningCount}). Review policy-status output in workflow DB.`,
+          ...loadedPolicy.warnings.map((warning) => `policy-warning: ${warning}`),
+        ]
+      : [];
 
   return (
     <Sequence>
+      <Task
+        id="policy-status"
+        output={outputs.policy_status}
+        skipIf={!!ctx.latest("policy_status", "policy-status")}
+      >
+        {{
+          configPath: loadedPolicy.configPath,
+          configFound: loadedPolicy.found,
+          warningCount: policyWarningCount,
+          warnings: loadedPolicy.warnings,
+          summary: policyStatusSummary,
+          effectiveClasses: POLICY_CLASSES.map((policyClass) => ({
+            policyClass,
+            enabled: policyConfig.classes[policyClass].enabled,
+            enabledTiers: policyConfig.classes[policyClass].enabledTiers,
+            blockOn: policyConfig.classes[policyClass].blockOn,
+            blockUnlessResolvedOrAccepted:
+              policyConfig.classes[policyClass].blockUnlessResolvedOrAccepted,
+          })),
+        }}
+      </Task>
+
       <Ralph
         until={done}
         maxIterations={maxPasses * units.length * 20}
@@ -649,8 +689,9 @@ export function ScheduledWorkflow({
               : `${landedIds.length}/${units.length} units landed. ${failedUnits.length} unit(s) failed after ${currentPass + 1} pass(es).`,
           nextSteps:
             failedUnits.length === 0
-              ? []
+              ? policyWarningSteps
               : [
+                  ...policyWarningSteps,
                   "Review failed units and their eviction/test context in .agentix/workflow.db",
                   "Consider running 'agentix run --resume' to retry failed units",
                   ...failedUnits.map(

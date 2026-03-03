@@ -12,6 +12,8 @@ Use this process for every tagged release.
    - Confirm `agentix.policy.json` thresholds match release risk posture.
    - Confirm medium severity acceptance requires rationale.
    - Confirm `high`/`critical` remain blocking for medium/large units.
+   - Confirm `operational` policy enablement matches rollout risk.
+   - Confirm `policy_status` output shows no unresolved config warnings.
 4. Update `CHANGELOG.md`:
    - Move completed items from `[Unreleased]` to a new version section.
    - Use heading format: `## [x.y.z] - YYYY-MM-DD`.
@@ -31,7 +33,7 @@ Use this process for every tagged release.
 `publish.yml` runs these mandatory gates before `npm publish`:
 - `bun run check`
 - `bun run release:check`
-- policy gate enforcement via workflow unit tests (including security/performance severity blocking)
+- policy gate enforcement via workflow unit tests (including security/performance/operational severity blocking)
 
 If any gate fails, publish is blocked.
 

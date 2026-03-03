@@ -41,6 +41,7 @@ export {
   computeLayers,
   evaluatePolicyGates,
   getPolicyChecks,
+  isPolicyClassEnabledForTier,
   loadAgentixPolicyConfig,
   policyIssueSchema,
   policyReviewOutputSchema,

@@ -1,0 +1,68 @@
+OPERATIONAL POLICY REVIEW — Unit: {props.unitId}
+
+Title: {props.unitName}
+Category: {props.unitCategory}
+Bounded context: {props.boundedContext}
+
+{props.whatWasDone ? `\n## Implementation Summary\n${props.whatWasDone}` : ""}
+{props.filesCreated && props.filesCreated.length > 0 ? `\nCreated:\n${props.filesCreated.map((f) => `- ${f}`).join("\n")}` : ""}
+{props.filesModified && props.filesModified.length > 0 ? `\nModified:\n${props.filesModified.map((f) => `- ${f}`).join("\n")}` : ""}
+
+## Verification Snapshot
+
+- Build passed: {props.buildPassed}
+- Tests passed: {props.testsPassed}
+- Scenario coverage: {props.scenariosCovered}/{props.scenariosTotal}
+
+## Domain Invariants
+
+{props.domainInvariants && props.domainInvariants.length > 0
+  ? props.domainInvariants.map((inv, i) => `${i + 1}. ${inv}`).join("\n")
+  : "None provided"}
+
+## Operational Checks
+
+Review every changed file against these checks:
+
+{props.policyChecks && props.policyChecks.length > 0
+  ? props.policyChecks.map((item, i) => `${i + 1}. ${item}`).join("\n")
+  : [
+      "1. Failure handling is explicit and observable",
+      "2. Rollback/mitigation path exists for risky behavior changes",
+      "3. Operational runbooks/alerts are updated where needed",
+      "4. New operational dependencies are guarded and resilient",
+    ].join("\n")}
+
+## Required Analysis
+
+At minimum, explicitly inspect:
+- Failure modes and retry/backoff/circuit-breaker behavior
+- Rollout/rollback impact and blast radius
+- Observability/logging/alerting implications
+- Operational safeguards for degraded dependencies
+
+Flag concrete issues with file-level specificity. Do not hand-wave.
+
+## Severity Model
+
+- `none`: no operational risk found.
+- `low`: small readiness gap, non-blocking by default.
+- `medium`: meaningful risk requiring remediation or explicit acceptance rationale.
+- `high`: major readiness risk that blocks merge.
+- `critical`: severe operational safety risk that blocks merge.
+
+## Policy Rules
+
+- `high` and `critical` always block.
+- `medium` blocks unless fixed in review-fix or accepted with explicit rationale.
+- If `approved: true` while severity is `medium`, `acceptanceRationale` must be non-empty.
+
+## Output Contract
+
+Return fields matching schema:
+- `approved`
+- `severity`
+- `issues`: array of `{ severity, description, file, recommendation, check }`
+- `remediationActions`: concrete fix actions
+- `evidence`: concrete proof (runbooks, tests, risk controls, reasoning)
+- `acceptanceRationale`: nullable string

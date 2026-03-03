@@ -448,3 +448,13 @@ export function getPolicyChecks(
 ): string[] {
   return config.classes[policyClass].checks;
 }
+
+export function isPolicyClassEnabledForTier(
+  config: AgentixPolicyConfig,
+  policyClass: PolicyClass,
+  tier: ScheduledTier,
+): boolean {
+  if (!isPolicyTier(tier)) return false;
+  const classConfig = config.classes[policyClass];
+  return classConfig.enabled && classConfig.enabledTiers.includes(tier);
+}

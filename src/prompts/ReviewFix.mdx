@@ -33,6 +33,14 @@ Recommended remediation actions:
 {props.performanceRemediationActions && props.performanceRemediationActions.length > 0 ? props.performanceRemediationActions.map((action, i) => `${i + 1}. ${action}`).join('\n') : 'None'}
 {props.performanceAcceptanceRationale ? `Existing acceptance rationale: ${props.performanceAcceptanceRationale}` : ''}
 
+## Operational Policy Review Issues
+Severity: {props.operationalSeverity}
+Issues:
+{props.operationalIssues && props.operationalIssues.length > 0 ? props.operationalIssues.map((issue, i) => `${i + 1}. ${issue}`).join('\n') : 'None'}
+Recommended remediation actions:
+{props.operationalRemediationActions && props.operationalRemediationActions.length > 0 ? props.operationalRemediationActions.map((action, i) => `${i + 1}. ${action}`).join('\n') : 'None'}
+{props.operationalAcceptanceRationale ? `Existing acceptance rationale: ${props.operationalAcceptanceRationale}` : ''}
+
 ## Your Task
 
 For EACH issue from all reviews:

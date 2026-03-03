@@ -105,6 +105,9 @@ export const scheduledOutputSchemas = {
   // ── Performance Review ────────────────────────────────────────────
   performance_review: policyReviewOutputSchema,
 
+  // ── Operational Review ────────────────────────────────────────────
+  operational_review: policyReviewOutputSchema,
+
   // ── Review Fix ────────────────────────────────────────────────────
   review_fix: z.object({
     summary: z.string(),
@@ -141,6 +144,26 @@ export const scheduledOutputSchemas = {
         }),
       )
       .nullable(),
+  }),
+
+  // ── Pass Tracker ──────────────────────────────────────────────────
+  policy_status: z.object({
+    configPath: z.string(),
+    configFound: z.boolean(),
+    warningCount: z.number(),
+    warnings: z.array(z.string()),
+    summary: z.string(),
+    effectiveClasses: z.array(
+      z.object({
+        policyClass: z.enum(["security", "performance", "operational"]),
+        enabled: z.boolean(),
+        enabledTiers: z.array(z.enum(["medium", "large"])),
+        blockOn: z.array(z.enum(["none", "low", "medium", "high", "critical"])),
+        blockUnlessResolvedOrAccepted: z.array(
+          z.enum(["none", "low", "medium", "high", "critical"]),
+        ),
+      }),
+    ),
   }),
 
   // ── Pass Tracker ──────────────────────────────────────────────────

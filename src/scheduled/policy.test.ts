@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import {
   DEFAULT_AGENTIX_POLICY_CONFIG,
   evaluatePolicyGates,
+  isPolicyClassEnabledForTier,
   loadAgentixPolicyConfig,
   type AgentixPolicyConfig,
   type PolicyReviewOutput,
@@ -179,5 +180,62 @@ describe("evaluatePolicyGates", () => {
     expect(gate.passed).toBe(false);
     expect(gate.reason).toContain("security");
     expect(gate.reason).toContain("low");
+  });
+
+  test("blocks when operational policy is enabled for tier and review is missing", () => {
+    const custom: AgentixPolicyConfig = {
+      ...DEFAULT_AGENTIX_POLICY_CONFIG,
+      classes: {
+        ...DEFAULT_AGENTIX_POLICY_CONFIG.classes,
+        operational: {
+          ...DEFAULT_AGENTIX_POLICY_CONFIG.classes.operational,
+          enabled: true,
+          enabledTiers: ["large"],
+          blockOn: ["high", "critical"],
+          blockUnlessResolvedOrAccepted: ["medium"],
+        },
+      },
+    };
+
+    const gate = evaluatePolicyGates({
+      tier: "large",
+      policyConfig: custom,
+      reviewFixResolved: false,
+      securityReview: mkReview(),
+      performanceReview: mkReview(),
+      operationalReview: null,
+    });
+
+    expect(gate.passed).toBe(false);
+    expect(gate.reason).toContain("Missing operational policy review");
+  });
+});
+
+describe("isPolicyClassEnabledForTier", () => {
+  test("returns false for tiers below medium", () => {
+    expect(
+      isPolicyClassEnabledForTier(
+        DEFAULT_AGENTIX_POLICY_CONFIG,
+        "security",
+        "small",
+      ),
+    ).toBe(false);
+  });
+
+  test("respects policy class enabled flag and tier mapping", () => {
+    expect(
+      isPolicyClassEnabledForTier(
+        DEFAULT_AGENTIX_POLICY_CONFIG,
+        "security",
+        "medium",
+      ),
+    ).toBe(true);
+    expect(
+      isPolicyClassEnabledForTier(
+        DEFAULT_AGENTIX_POLICY_CONFIG,
+        "operational",
+        "large",
+      ),
+    ).toBe(false);
   });
 });

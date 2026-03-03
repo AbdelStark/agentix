@@ -128,6 +128,32 @@ describe("scheduledOutputSchemas.test", () => {
     expect(parsed.issues).toHaveLength(1);
   });
 
+  test("accepts operational policy review payload", () => {
+    const parsed = scheduledOutputSchemas.operational_review.parse({
+      approved: false,
+      severity: "high",
+      issues: [
+        {
+          severity: "high",
+          description: "No rollback path for migration and no failure containment",
+          file: "src/migrations/user-index.ts",
+          recommendation: "Add reversible migration and rollback runbook",
+          check: "rollback-readiness",
+        },
+      ],
+      remediationActions: [
+        "Added reversible migration and rollback command",
+      ],
+      evidence: [
+        "Documented rollback in docs/runbooks/migration.md",
+      ],
+      acceptanceRationale: null,
+    });
+
+    expect(parsed.severity).toBe("high");
+    expect(parsed.issues[0]?.check).toBe("rollback-readiness");
+  });
+
   test("rejects policy review payload missing required evidence fields", () => {
     expect(() =>
       scheduledOutputSchemas.performance_review.parse({
@@ -155,5 +181,41 @@ describe("scheduledOutputSchemas.test", () => {
         acceptanceRationale: null,
       }),
     ).toThrow();
+  });
+
+  test("accepts structured policy status output", () => {
+    const parsed = scheduledOutputSchemas.policy_status.parse({
+      configPath: "/repo/agentix.policy.json",
+      configFound: true,
+      warningCount: 1,
+      warnings: ["Invalid blockOn value for security policy class"],
+      summary: "Policy config loaded with 1 warning(s).",
+      effectiveClasses: [
+        {
+          policyClass: "security",
+          enabled: true,
+          enabledTiers: ["medium", "large"],
+          blockOn: ["high", "critical"],
+          blockUnlessResolvedOrAccepted: ["medium"],
+        },
+        {
+          policyClass: "performance",
+          enabled: true,
+          enabledTiers: ["medium", "large"],
+          blockOn: ["high", "critical"],
+          blockUnlessResolvedOrAccepted: ["medium"],
+        },
+        {
+          policyClass: "operational",
+          enabled: false,
+          enabledTiers: ["large"],
+          blockOn: ["critical"],
+          blockUnlessResolvedOrAccepted: ["high"],
+        },
+      ],
+    });
+
+    expect(parsed.warningCount).toBe(1);
+    expect(parsed.effectiveClasses).toHaveLength(3);
   });
 });

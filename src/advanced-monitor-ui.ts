@@ -26,6 +26,7 @@ const DISPLAY_STAGES = [
   { key: "code-review",  abbr: "V", table: "code_review",  nodeId: "code-review" },
   { key: "security-review", abbr: "S", table: "security_review", nodeId: "security-review" },
   { key: "performance-review", abbr: "P", table: "performance_review", nodeId: "performance-review" },
+  { key: "operational-review", abbr: "O", table: "operational_review", nodeId: "operational-review" },
   { key: "review-fix",   abbr: "F", table: "review_fix",   nodeId: "review-fix" },
   { key: "final-review", abbr: "G", table: "final_review", nodeId: "final-review" },
 ] as const;
@@ -33,8 +34,8 @@ const DISPLAY_STAGES = [
 const TIER_STAGES: Record<string, readonly string[]> = {
   trivial: ["implement", "test"],
   small:   ["implement", "test", "code-review"],
-  medium:  ["research", "plan", "implement", "test", "prd-review", "code-review", "security-review", "performance-review", "review-fix"],
-  large:   ["research", "plan", "implement", "test", "prd-review", "code-review", "security-review", "performance-review", "review-fix", "final-review"],
+  medium:  ["research", "plan", "implement", "test", "prd-review", "code-review", "security-review", "performance-review", "operational-review", "review-fix"],
+  large:   ["research", "plan", "implement", "test", "prd-review", "code-review", "security-review", "performance-review", "operational-review", "review-fix", "final-review"],
 };
 
 const PRIORITY_ABBR: Record<string, string> = { critical: "!!", high: "hi", medium: "md", low: "lo" };
@@ -44,7 +45,8 @@ const JOB_ABBR: Record<string, string> = {
   "ticket:research": "research", "ticket:plan": "plan", "ticket:implement": "impl",
   "ticket:test": "test", "ticket:prd-review": "prd-rev",
   "ticket:code-review": "code-rev", "ticket:security-review": "sec-rev",
-  "ticket:performance-review": "perf-rev", "ticket:review-fix": "rev-fix", "ticket:final-review": "final",
+  "ticket:performance-review": "perf-rev", "ticket:operational-review": "ops-rev",
+  "ticket:review-fix": "rev-fix", "ticket:final-review": "final",
 };
 
 // Stage detail: which column to SELECT for human-readable summary
@@ -53,6 +55,7 @@ const STAGE_SUMMARY_COL: Record<string, string> = {
   test: "failing_summary",
   prd_review: "severity", code_review: "severity",
   security_review: "severity", performance_review: "severity",
+  operational_review: "severity",
   review_fix: "summary", final_review: "reasoning",
 };
 
@@ -115,6 +118,7 @@ interface PollData {
   phase: WorkflowPhase;
   mergeQueueActivity: MergeQueueActivity | null;
   schedulerReasoning: string | null;
+  policyWarningCount: number;
   discoveryCount: number;
 }
 
@@ -248,7 +252,7 @@ export async function runMonitorUI(opts: MonitorUIOptions): Promise<{ started: b
   let data: PollData = {
     tickets: [], activeJobs: [], discovered: 0, landed: 0, evicted: 0,
     inPipeline: 0, maxConcurrency: 0, phase: "starting",
-    mergeQueueActivity: null, schedulerReasoning: null, discoveryCount: 0,
+    mergeQueueActivity: null, schedulerReasoning: null, policyWarningCount: 0, discoveryCount: 0,
   };
   let selectedIdx = 0;
   // focus: pipeline = left panel; jobs/events/logs = right panels
@@ -258,6 +262,7 @@ export async function runMonitorUI(opts: MonitorUIOptions): Promise<{ started: b
   let lastError: string | null = null;
   const eventLog: EventLogEntry[] = [];
   let prevPhase: WorkflowPhase = "starting";
+  let announcedPolicyWarnings: string | null = null;
 
   function addEvent(message: string) {
     eventLog.push({ time: fmtTime(), message });
@@ -397,10 +402,19 @@ const root = new BoxRenderable(renderer, {
     phaseText.content = `${phaseInfo.icon} ${phaseInfo.label}${phaseExtra}`;
 
     // Stats bar
-    const { discovered, landed, evicted, inPipeline, activeJobs, maxConcurrency } = data;
+    const {
+      discovered,
+      landed,
+      evicted,
+      inPipeline,
+      activeJobs,
+      maxConcurrency,
+      policyWarningCount,
+    } = data;
     const slots = maxConcurrency ? `${activeJobs.length}/${maxConcurrency}` : `${activeJobs.length}`;
     const errorIndicator = lastError ? ` | \x1b[31mERR\x1b[0m` : "";
-    statsText.content = `Units: ${discovered} | In Pipeline: ${inPipeline} | Landed: ${landed} | Evicted: ${evicted} | Jobs: ${slots}${errorIndicator}`;
+    const policyIndicator = policyWarningCount > 0 ? ` | PolicyWarnings: ${policyWarningCount}` : "";
+    statsText.content = `Units: ${discovered} | In Pipeline: ${inPipeline} | Landed: ${landed} | Evicted: ${evicted} | Jobs: ${slots}${policyIndicator}${errorIndicator}`;
 
     // ── Pipeline panel ──
     if (data.phase === "starting" || data.phase === "interpreting") {
@@ -708,6 +722,29 @@ const root = new BoxRenderable(renderer, {
         if (row) schedulerReasoning = row.summary;
       } catch {}
 
+      // 9. Policy status warnings (structured workflow output)
+      let policyWarningCount = 0;
+      let policyWarnings: string[] = [];
+      try {
+        const row = db.query(
+          `SELECT warning_count, warnings, summary FROM policy_status WHERE run_id = ? ORDER BY iteration DESC LIMIT 1`,
+        ).get(runId) as any;
+        if (row) {
+          policyWarningCount =
+            typeof row.warning_count === "number" ? row.warning_count : 0;
+          policyWarnings = Array.isArray(row.warnings)
+            ? row.warnings
+            : JSON.parse(row.warnings || "[]");
+          const policySummary =
+            typeof row.summary === "string" ? row.summary : null;
+          if (policySummary) {
+            schedulerReasoning = schedulerReasoning
+              ? `${schedulerReasoning}\nPolicy: ${policySummary}`
+              : `Policy: ${policySummary}`;
+          }
+        }
+      } catch {}
+
       db.close();
 
       // Build ticket views
@@ -763,12 +800,26 @@ const root = new BoxRenderable(renderer, {
       if (data.landed < landed) addEvent(`${landed - data.landed} unit(s) landed (total: ${landed}/${tickets.length})`);
       if (data.evicted < evicted) addEvent(`${evicted - data.evicted} unit(s) evicted`);
       if (data.discovered < tickets.length) addEvent(`${tickets.length - data.discovered} new unit(s) loaded (total: ${tickets.length})`);
+      if (policyWarnings.length > 0) {
+        const fingerprint = policyWarnings.join(" | ");
+        if (announcedPolicyWarnings !== fingerprint) {
+          addEvent(`Policy warning(s): ${fingerprint}`);
+          announcedPolicyWarnings = fingerprint;
+        }
+      } else {
+        announcedPolicyWarnings = null;
+      }
 
       data = {
         tickets, activeJobs,
         discovered: tickets.length, landed, evicted,
         inPipeline: tickets.length - landed,
-        maxConcurrency, phase, mergeQueueActivity, schedulerReasoning, discoveryCount,
+        maxConcurrency,
+        phase,
+        mergeQueueActivity,
+        schedulerReasoning,
+        policyWarningCount,
+        discoveryCount,
       };
 
       if (selectedIdx >= data.tickets.length) selectedIdx = Math.max(0, data.tickets.length - 1);
