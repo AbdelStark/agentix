@@ -55,6 +55,9 @@ bun run typecheck
 bun test
 # or both in one command:
 bun run check
+
+# release metadata gate (before tagging/publish)
+bun run release:check
 ```
 
 ## CLI
@@ -90,8 +93,8 @@ You can edit the work plan before running.
 
 Generates a Smithers workflow file, creates agent instances, and executes. The workflow:
 
-1. Computes DAG layers (topological groups of independent units)
-2. For each layer, runs quality pipelines in parallel (one per unit, in isolated jj worktrees)
+1. Classifies units by dependency satisfaction (active vs blocked) each pass
+2. Runs quality pipelines in parallel for active units (isolated jj worktrees)
 3. Lands tier-complete units onto main via the merge queue
 4. Repeats until all units land or max passes reached
 
@@ -149,7 +152,7 @@ evictionContext → implement (after merge conflict)
 
 ### Merge Queue
 
-After quality pipelines complete for a layer, the merge queue:
+After quality pipelines complete for each pass, the merge queue:
 
 1. Detects file overlaps between units
 2. Lands non-overlapping units speculatively (parallel rebase)
@@ -158,6 +161,14 @@ After quality pipelines complete for a layer, the merge queue:
 5. Evicts units with conflicts or test failures — detailed context is fed back to the implementer on the next pass
 
 All VCS operations use jj: `jj rebase`, `jj bookmark set`, `jj git push`.
+
+### Run Observability
+
+Agentix writes structured local telemetry events to:
+
+- `.agentix/events.jsonl`
+
+This stream captures command lifecycle transitions (`started`, `completed`, `failed`, `cancelled`) with run IDs and troubleshooting details.
 
 ### DAG-Driven Parallelism
 
@@ -233,6 +244,8 @@ Speed is valuable, but only when correctness, testability, and maintainability a
 
 - [CONTRIBUTING.md](CONTRIBUTING.md)
 - [Production Readiness Checklist](docs/production-readiness-checklist.md)
+- [Release Process](docs/release-process.md)
+- [Observability](docs/observability.md)
 - [Agentix Excellence Thesis](docs/agentic-excellence-thesis.md)
 - [Agentix Excellence Roadmap](docs/agentic-excellence-roadmap.md)
 
@@ -263,6 +276,7 @@ src/
 │   ├── init-scheduled.ts       # RFC decomposition + config
 │   ├── plan.ts                 # Re-generate work plan
 │   ├── run.ts                  # Execute workflow
+│   ├── events.ts               # Structured command event logging
 │   ├── render-scheduled-workflow.ts  # Generate workflow.tsx (~120 lines)
 │   ├── status.ts               # Show current state
 │   └── monitor-cmd.ts          # Attach TUI
@@ -287,7 +301,9 @@ src/
 docs/
 ├── agentic-excellence-thesis.md
 ├── agentic-excellence-roadmap.md
-└── production-readiness-checklist.md
+├── observability.md
+├── production-readiness-checklist.md
+└── release-process.md
 .codex/skills/
 ├── _index.md
 ├── ddd-context-mapping/SKILL.md

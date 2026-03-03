@@ -31,6 +31,7 @@ Agentix is an opinionated agentic workflow orchestrator for production-grade sof
 | Typecheck | `bun run typecheck` | Includes MDX types generation |
 | Test | `bun test` | Runs unit tests |
 | Full local gate | `bun run check` | Typecheck + tests |
+| Release metadata gate | `bun run release:check` | Ensure CHANGELOG matches package version |
 | CLI help | `bun run cli --help` | Uses package script |
 | Initialize workflow | `bun run cli init ./path/to/rfc.md` | Generates `.agentix` artifacts |
 | Regenerate plan | `bun run cli plan` | Recomputes work plan from config RFC |
@@ -120,6 +121,7 @@ Before destructive or high-impact edits:
 | Missing MDX prop type errors | `src/mdx.d.ts` stale | Run `bun run typecheck` |
 | Workflow cannot resume | Missing/invalid `.agentix/workflow.db` | Re-run init/run or inspect `.agentix` state |
 | Tests missing from quality pass | Check command not run | Run `bun run check` before commit |
+| Hard to diagnose command failures | No local command trace | Inspect `.agentix/events.jsonl` |
 | Agent commands fail | Required CLI missing (`claude`/`codex`/`jj`) | Install tools and retry |
 </known_issues>
 
@@ -157,6 +159,7 @@ Load skill `SKILL.md` when entering its domain.
 - 2026-03-03: Rebrand from prior fork naming to Agentix.
 - 2026-03-03: Ignore `.smithers/executions/` artifacts in git.
 - 2026-03-03: Adopt DDD + BDD + TDD as default orchestration doctrine.
+- 2026-03-03: Add structured command telemetry in `.agentix/events.jsonl`.
 </project_decisions>
 
 <lessons_learned>

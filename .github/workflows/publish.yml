@@ -24,6 +24,9 @@ jobs:
       - name: Verify quality gates
         run: bun run check
 
+      - name: Verify release metadata
+        run: bun run release:check
+
       - uses: actions/setup-node@v4
         with:
           node-version: "20"

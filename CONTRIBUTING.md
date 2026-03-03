@@ -7,6 +7,7 @@
 3. Run quality gates locally:
    - `bun run typecheck`
    - `bun test`
+   - `bun run release:check` (required for release/tag prep)
 4. Update docs when behavior/contracts change.
 5. Submit a scoped commit with clear intent.
 
@@ -19,6 +20,7 @@ Changes should be merge-ready only if all are true:
 - Work-unit contract remains valid (DDD + BDD + TDD fields).
 - No uncovered executable scenarios for affected units.
 - Docs/context files are updated when operational behavior changes.
+- `.agentix/events.jsonl` remains local runtime telemetry (never committed).
 
 ## Design Rules
 
@@ -32,7 +34,6 @@ Changes should be merge-ready only if all are true:
 GitHub Actions runs:
 
 - `bun install --frozen-lockfile`
-- `bun run typecheck`
-- `bun test`
+- `bun run check`
 
 Pull requests should be green before merge.

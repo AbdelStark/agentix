@@ -56,6 +56,7 @@ A unit is merge-eligible only if:
 6. Domain invariants remain true
 7. Local quality gate `bun run check` passes
 8. CI quality gate (typecheck + tests) is green
+9. For tagged releases, `bun run release:check` passes
 </gates>
 
 <escalation>

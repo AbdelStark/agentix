@@ -7,6 +7,7 @@ Use this checklist before tagging a release.
 - [ ] `bun install --frozen-lockfile` succeeds
 - [ ] `bun run typecheck` succeeds
 - [ ] `bun test` succeeds
+- [ ] `bun run release:check` succeeds
 - [ ] CI workflow is green for the release commit
 
 ## Contract Integrity
@@ -19,6 +20,7 @@ Use this checklist before tagging a release.
 
 - [ ] `.agentix/` runtime artifacts are excluded from git
 - [ ] `.smithers/executions/` logs are excluded from git
+- [ ] `.agentix/events.jsonl` telemetry is present and readable locally
 - [ ] No secrets or credentials are committed
 
 ## Documentation
@@ -31,5 +33,6 @@ Use this checklist before tagging a release.
 ## Release Hygiene
 
 - [ ] Version/tag strategy is clear and consistent
+- [ ] `CHANGELOG.md` has an entry for the release version
 - [ ] Release notes summarize contract changes and migration impact
-- [ ] Publish pipeline includes quality checks before publish
+- [ ] Publish pipeline includes quality + release checks before publish

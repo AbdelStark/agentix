@@ -18,6 +18,7 @@
   "files": [
     "src/",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "engines": {
@@ -48,6 +49,7 @@
     "typecheck": "bun scripts/gen-mdx-types.ts && tsc --noEmit",
     "test": "bun test",
     "check": "bun run typecheck && bun test",
+    "release:check": "bun scripts/release-check.ts",
     "cli": "bun run src/cli/agentix.ts"
   },
   "peerDependencies": {
