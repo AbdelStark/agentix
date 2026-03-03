@@ -33,6 +33,8 @@ Build: {props.buildPassed ?? 'unknown'}
 Tests: {props.testsPassCount ?? 0} passed, {props.testsFailCount ?? 0} failed
 Scenario coverage: {props.scenariosCovered ?? 0}/{props.scenariosTotal ?? 0}
 {props.uncoveredScenarios && props.uncoveredScenarios.length > 0 ? `Uncovered scenarios: ${props.uncoveredScenarios.join(', ')}` : ''}
+Trace completeness: {props.traceCompleteness ?? false}
+{props.antiSlopFlags && props.antiSlopFlags.length > 0 ? `Anti-slop flags: ${props.antiSlopFlags.join(', ')}` : ''}
 TDD evidence: {props.tddEvidence ?? 'n/a'}
 {props.failingSummary ? `Failures: ${props.failingSummary}` : ''}
 
@@ -47,6 +49,7 @@ Set `readyToMoveOn: true` ONLY if ALL of these are met:
 - All acceptance criteria are satisfied
 - Tests pass (build + test suites)
 - Scenario coverage is complete (no uncovered Gherkin scenarios)
+- Scenario trace matrix is complete and anti-slop flags are clear
 - Domain invariants are preserved
 - Review severity is none or minor
 - Implementation is functionally complete

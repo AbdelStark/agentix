@@ -16,6 +16,24 @@ const issueSchema = z.object({
   reference: z.string().nullable(),
 });
 
+const scenarioTraceEvidenceSchema = z.object({
+  given: z.string(),
+  when: z.string(),
+  then: z.string(),
+});
+
+const scenarioTraceEntrySchema = z.object({
+  scenarioId: z.string(),
+  mappedTests: z.array(z.string()),
+  evidence: scenarioTraceEvidenceSchema,
+});
+
+const assertionSignalsSchema = z.object({
+  totalAssertions: z.number().int().nonnegative(),
+  filesWithAssertions: z.number().int().nonnegative(),
+  weakTestsDetected: z.boolean(),
+});
+
 export const scheduledOutputSchemas = {
   // ── Research ──────────────────────────────────────────────────────
   research: z.object({
@@ -54,6 +72,10 @@ export const scheduledOutputSchemas = {
     scenariosTotal: z.number(),
     scenariosCovered: z.number(),
     uncoveredScenarios: z.array(z.string()),
+    scenarioTrace: z.array(scenarioTraceEntrySchema),
+    traceCompleteness: z.boolean(),
+    assertionSignals: assertionSignalsSchema,
+    antiSlopFlags: z.array(z.string()),
     tddEvidence: z.string(),
     scenarioCoverageNotes: z.string(),
     failingSummary: z.string().nullable(),

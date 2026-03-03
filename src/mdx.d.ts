@@ -22,6 +22,7 @@ declare module "*/prompts/CodeReview.mdx" {
 declare module "*/prompts/FinalReview.mdx" {
   interface FinalReviewPromptProps {
     acceptanceCriteria?: any;
+    antiSlopFlags?: any;
     believesComplete?: any;
     boundedContext: any;
     buildPassed?: any;
@@ -43,6 +44,7 @@ declare module "*/prompts/FinalReview.mdx" {
     tddEvidence?: any;
     testsFailCount?: any;
     testsPassCount?: any;
+    traceCompleteness?: any;
     uncoveredScenarios?: any;
     unitId: any;
     unitName: any;

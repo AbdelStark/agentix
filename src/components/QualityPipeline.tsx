@@ -380,6 +380,8 @@ export function QualityPipeline({
               scenariosTotal={test?.scenariosTotal ?? unit.gherkinScenarios.length}
               scenariosCovered={test?.scenariosCovered ?? 0}
               uncoveredScenarios={test?.uncoveredScenarios ?? []}
+              traceCompleteness={test?.traceCompleteness ?? false}
+              antiSlopFlags={test?.antiSlopFlags ?? []}
               tddEvidence={test?.tddEvidence ?? null}
               failingSummary={test?.failingSummary ?? null}
               prdSeverity={prdReview?.severity ?? null}

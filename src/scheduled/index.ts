@@ -16,3 +16,16 @@ export {
   computeLayers,
 } from "./types";
 export { decomposeRFC, printPlanSummary } from "./decompose";
+export {
+  ANTI_SLOP_FLAGS,
+  evaluateTraceMatrix,
+  getBlockingAntiSlopFlags,
+  normalizeAssertionSignals,
+  writeTraceMatrixArtifact,
+  type ScenarioTraceEvidence,
+  type ScenarioTraceEntry,
+  type AssertionSignals,
+  type TraceMatrixTestResult,
+  type TraceMatrixEvaluation,
+  type TraceMatrixArtifact,
+} from "./trace-matrix";
