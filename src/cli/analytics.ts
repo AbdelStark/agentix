@@ -56,6 +56,7 @@ export type AnalyticsSummary = {
     malformedLines: number;
     droppedEvents: number;
     schemaVersions: Record<string, number>;
+    excludedCommands: string[];
   };
   totals: {
     started: number;
@@ -128,6 +129,7 @@ type AnalyzeTelemetryOptions = {
   topFailures?: number;
   eventsPath?: string | null;
   excludeSessionId?: string;
+  excludeCommands?: string[];
 };
 
 type ParseResult = {
@@ -234,8 +236,12 @@ export function analyzeTelemetryFromJsonl(
       ? Math.floor(opts.topFailures as number)
       : DEFAULT_FAILURE_TOP;
   const window = parseWindow(opts.window ?? DEFAULT_ANALYTICS_WINDOW, now);
+  const excludedCommands = normalizeCommandFilters(opts.excludeCommands);
 
-  const parsed = parseJsonlEvents(raw, opts.excludeSessionId);
+  const parsed = parseJsonlEvents(raw, {
+    excludeSessionId: opts.excludeSessionId,
+    excludeCommands: excludedCommands,
+  });
   const windowed = parsed.events.filter(
     (event) => event.timestampMs >= window.startMs && event.timestampMs <= window.endMs,
   );
@@ -352,6 +358,7 @@ export function analyzeTelemetryFromJsonl(
       malformedLines: parsed.malformedLines,
       droppedEvents: parsed.droppedEvents,
       schemaVersions: parsed.schemaVersions,
+      excludedCommands,
     },
     totals,
     durationsMs: {
@@ -389,6 +396,7 @@ export async function analyzeTelemetryFile(opts: {
   window?: string;
   topFailures?: number;
   excludeSessionId?: string;
+  excludeCommands?: string[];
 }): Promise<{ summary: AnalyticsSummary; eventsPath: string }> {
   const eventsPath = join(opts.repoRoot, ".agentix", "events.jsonl");
   const raw = existsSync(eventsPath)
@@ -401,6 +409,7 @@ export async function analyzeTelemetryFile(opts: {
     topFailures: opts.topFailures,
     eventsPath,
     excludeSessionId: opts.excludeSessionId,
+    excludeCommands: opts.excludeCommands,
   });
 
   return { summary, eventsPath };
@@ -497,12 +506,18 @@ export async function writeQualityReport(
   return reportPath;
 }
 
-function parseJsonlEvents(raw: string, excludeSessionId?: string): ParseResult {
+function parseJsonlEvents(
+  raw: string,
+  opts: { excludeSessionId?: string; excludeCommands?: string[] } = {},
+): ParseResult {
   const lines = raw.split(/\r?\n/);
   const events: NormalizedEvent[] = [];
   let malformedLines = 0;
   let droppedEvents = 0;
   const schemaVersions = new Map<string, number>();
+  const excludedCommandSet = new Set(
+    (opts.excludeCommands ?? []).map((command) => command.toLowerCase()),
+  );
 
   for (const line of lines) {
     if (!line.trim()) continue;
@@ -521,7 +536,11 @@ function parseJsonlEvents(raw: string, excludeSessionId?: string): ParseResult {
       continue;
     }
 
-    if (excludeSessionId && normalized.sessionId === excludeSessionId) {
+    if (opts.excludeSessionId && normalized.sessionId === opts.excludeSessionId) {
+      continue;
+    }
+
+    if (excludedCommandSet.has(normalized.command.toLowerCase())) {
       continue;
     }
 
@@ -606,6 +625,17 @@ function asString(value: unknown): string | undefined {
 function asNumber(value: unknown): number | undefined {
   if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
   return value;
+}
+
+function normalizeCommandFilters(commands?: string[]): string[] {
+  if (!commands || commands.length === 0) return [];
+
+  const normalized = commands
+    .flatMap((entry) => entry.split(","))
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean);
+
+  return [...new Set(normalized)].sort((a, b) => a.localeCompare(b));
 }
 
 function isTerminal(lifecycle: Lifecycle): boolean {

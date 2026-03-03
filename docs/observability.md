@@ -45,6 +45,7 @@ Agentix now ships local analytics commands over `.agentix/events.jsonl`:
 - `agentix analytics summary --window 7d --json --write-report`
 - `agentix analytics failures --window 7d --top 10`
 - `agentix analytics failures --window 7d --top 10 --json`
+- `agentix analytics summary --window 7d --exclude-command analytics` (recommended to reduce self-observability noise)
 
 Generated artifacts:
 - `.agentix/analytics/daily-YYYY-MM-DD.json` (daily rollup snapshot)
@@ -52,6 +53,24 @@ Generated artifacts:
 
 Failure taxonomy buckets:
 - `config`, `environment`, `schema`, `tests`, `merge`, `policy`, `infra`, `unknown`
+
+## Telemetry Hard Gate
+
+`agentix.policy.json` supports a configurable telemetry hard gate:
+
+```json
+{
+  "schemaVersion": 1,
+  "telemetry": {
+    "runNonZeroExitHardGate": {
+      "enabled": true,
+      "threshold": 2
+    }
+  }
+}
+```
+
+When enabled, `agentix analytics summary` exits with code `1` if recurring non-zero `run` exits meet/exceed the threshold.
 
 ## Merge Queue Risk Taxonomy
 

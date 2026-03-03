@@ -52,9 +52,9 @@
     "check": "bun run typecheck && bun test",
     "release:check": "bun scripts/release-check.ts",
     "cli": "bun run src/cli/agentix.ts",
-    "analytics:summary": "bun run src/cli/agentix.ts analytics summary --window 7d",
-    "analytics:failures": "bun run src/cli/agentix.ts analytics failures --window 7d --top 10",
-    "ops:quality-report": "bun run src/cli/agentix.ts analytics summary --window 7d --write-report"
+    "analytics:summary": "bun run src/cli/agentix.ts analytics summary --window 7d --exclude-command analytics",
+    "analytics:failures": "bun run src/cli/agentix.ts analytics failures --window 7d --top 10 --exclude-command analytics",
+    "ops:quality-report": "bun run src/cli/agentix.ts analytics summary --window 7d --write-report --exclude-command analytics"
   },
   "peerDependencies": {
     "smithers-orchestrator": "^0.9.0"

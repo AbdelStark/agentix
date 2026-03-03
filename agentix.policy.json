@@ -38,5 +38,11 @@
         "Rollout/rollback path is documented for risky changes"
       ]
     }
+  },
+  "telemetry": {
+    "runNonZeroExitHardGate": {
+      "enabled": false,
+      "threshold": 3
+    }
   }
 }

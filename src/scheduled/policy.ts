@@ -64,9 +64,19 @@ export type PolicyClassConfig = {
   checks: string[];
 };
 
+export type TelemetryHardGateConfig = {
+  enabled: boolean;
+  threshold: number;
+};
+
+export type TelemetryPolicyConfig = {
+  runNonZeroExitHardGate: TelemetryHardGateConfig;
+};
+
 export type AgentixPolicyConfig = {
   schemaVersion: 1;
   classes: Record<PolicyClass, PolicyClassConfig>;
+  telemetry: TelemetryPolicyConfig;
 };
 
 const DEFAULT_SECURITY_CHECKS = [
@@ -115,6 +125,13 @@ const DEFAULT_OPERATIONAL_CONFIG: PolicyClassConfig = {
   checks: DEFAULT_OPERATIONAL_CHECKS,
 };
 
+const DEFAULT_TELEMETRY_CONFIG: TelemetryPolicyConfig = {
+  runNonZeroExitHardGate: {
+    enabled: false,
+    threshold: 3,
+  },
+};
+
 export const DEFAULT_AGENTIX_POLICY_CONFIG: AgentixPolicyConfig = {
   schemaVersion: 1,
   classes: {
@@ -122,6 +139,7 @@ export const DEFAULT_AGENTIX_POLICY_CONFIG: AgentixPolicyConfig = {
     performance: DEFAULT_PERFORMANCE_CONFIG,
     operational: DEFAULT_OPERATIONAL_CONFIG,
   },
+  telemetry: DEFAULT_TELEMETRY_CONFIG,
 };
 
 const policyClassConfigInputSchema = z.object({
@@ -133,6 +151,15 @@ const policyClassConfigInputSchema = z.object({
   checks: z.array(z.string()).optional(),
 });
 
+const telemetryPolicyInputSchema = z.object({
+  runNonZeroExitHardGate: z
+    .object({
+      enabled: z.boolean().optional(),
+      threshold: z.number().int().min(1).optional(),
+    })
+    .optional(),
+});
+
 export const agentixPolicyConfigInputSchema = z.object({
   schemaVersion: z.literal(1).optional(),
   classes: z
@@ -142,6 +169,7 @@ export const agentixPolicyConfigInputSchema = z.object({
       operational: policyClassConfigInputSchema.optional(),
     })
     .optional(),
+  telemetry: telemetryPolicyInputSchema.optional(),
 });
 
 type PolicyConfigInput = z.infer<typeof agentixPolicyConfigInputSchema>;
@@ -169,6 +197,24 @@ function mergeClassConfig(
   };
 }
 
+function mergeTelemetryConfig(
+  base: TelemetryPolicyConfig,
+  input?: z.infer<typeof telemetryPolicyInputSchema>,
+): TelemetryPolicyConfig {
+  const baseGate = base.runNonZeroExitHardGate;
+  const inputGate = input?.runNonZeroExitHardGate;
+
+  return {
+    runNonZeroExitHardGate: {
+      enabled: inputGate?.enabled ?? baseGate.enabled,
+      threshold: Math.max(
+        1,
+        Math.floor(inputGate?.threshold ?? baseGate.threshold),
+      ),
+    },
+  };
+}
+
 function normalizePolicyConfig(input: PolicyConfigInput): AgentixPolicyConfig {
   return {
     schemaVersion: 1,
@@ -186,6 +232,10 @@ function normalizePolicyConfig(input: PolicyConfigInput): AgentixPolicyConfig {
         input.classes?.operational,
       ),
     },
+    telemetry: mergeTelemetryConfig(
+      DEFAULT_AGENTIX_POLICY_CONFIG.telemetry,
+      input.telemetry,
+    ),
   };
 }
 
@@ -266,6 +316,15 @@ export type PolicyGateEvaluation = {
   blockingDecisions: PolicyGateDecision[];
 };
 
+export type TelemetryPolicyGateEvaluation = {
+  enabled: boolean;
+  passed: boolean;
+  reason: string;
+  runNonZeroExitCount: number;
+  threshold: number;
+  blockedBy: "none" | "run-non-zero-hard-gate";
+};
+
 function normalizeSeverity(value: unknown): PolicySeverity {
   if (typeof value !== "string") return "none";
   return POLICY_SEVERITIES.includes(value as PolicySeverity)
@@ -287,6 +346,7 @@ export function evaluatePolicyGates(params: {
   securityReview: PolicyReviewGateInput;
   performanceReview: PolicyReviewGateInput;
   operationalReview?: PolicyReviewGateInput;
+  runNonZeroExitCount?: number;
   policyConfig?: AgentixPolicyConfig;
 }): PolicyGateEvaluation {
   const config = params.policyConfig ?? DEFAULT_AGENTIX_POLICY_CONFIG;
@@ -433,6 +493,25 @@ export function evaluatePolicyGates(params: {
   }
 
   const blockingDecisions = decisions.filter((decision) => decision.required && !decision.passed);
+  const telemetryGate = evaluateTelemetryPolicyGates({
+    policyConfig: config,
+    runNonZeroExitCount: params.runNonZeroExitCount ?? 0,
+  });
+
+  if (telemetryGate.enabled && !telemetryGate.passed) {
+    const decision: PolicyGateDecision = {
+      policyClass: "operational",
+      required: true,
+      passed: false,
+      reason: telemetryGate.reason,
+      severity: "high",
+      blockedBy: "hard-severity",
+      acceptedWithRationale: false,
+      resolvedByReviewFix: false,
+    };
+    decisions.push(decision);
+    blockingDecisions.push(decision);
+  }
 
   return {
     passed: blockingDecisions.length === 0,
@@ -457,4 +536,47 @@ export function isPolicyClassEnabledForTier(
   if (!isPolicyTier(tier)) return false;
   const classConfig = config.classes[policyClass];
   return classConfig.enabled && classConfig.enabledTiers.includes(tier);
+}
+
+export function evaluateTelemetryPolicyGates(params: {
+  policyConfig?: AgentixPolicyConfig;
+  runNonZeroExitCount: number;
+}): TelemetryPolicyGateEvaluation {
+  const config = params.policyConfig ?? DEFAULT_AGENTIX_POLICY_CONFIG;
+  const gate = config.telemetry.runNonZeroExitHardGate;
+  const observed = Math.max(0, Math.floor(params.runNonZeroExitCount));
+  const threshold = Math.max(1, Math.floor(gate.threshold));
+
+  if (!gate.enabled) {
+    return {
+      enabled: false,
+      passed: true,
+      reason: "run non-zero exit hard gate is disabled",
+      runNonZeroExitCount: observed,
+      threshold,
+      blockedBy: "none",
+    };
+  }
+
+  if (observed >= threshold) {
+    return {
+      enabled: true,
+      passed: false,
+      reason:
+        `Operational telemetry hard gate blocked: run non-zero exits ${observed} meets/exceeds threshold ${threshold}`,
+      runNonZeroExitCount: observed,
+      threshold,
+      blockedBy: "run-non-zero-hard-gate",
+    };
+  }
+
+  return {
+    enabled: true,
+    passed: true,
+    reason:
+      `Operational telemetry hard gate passed: run non-zero exits ${observed} below threshold ${threshold}`,
+    runNonZeroExitCount: observed,
+    threshold,
+    blockedBy: "none",
+  };
 }

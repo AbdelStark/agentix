@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import {
   DEFAULT_AGENTIX_POLICY_CONFIG,
   evaluatePolicyGates,
+  evaluateTelemetryPolicyGates,
   isPolicyClassEnabledForTier,
   loadAgentixPolicyConfig,
   type AgentixPolicyConfig,
@@ -49,6 +50,12 @@ describe("loadAgentixPolicyConfig", () => {
               blockOn: ["medium", "high", "critical"],
             },
           },
+          telemetry: {
+            runNonZeroExitHardGate: {
+              enabled: true,
+              threshold: 2,
+            },
+          },
         }),
         "utf8",
       );
@@ -58,6 +65,8 @@ describe("loadAgentixPolicyConfig", () => {
       expect(loaded.warnings).toEqual([]);
       expect(loaded.config.classes.security.blockOn).toContain("medium");
       expect(loaded.config.classes.security.blockOn).toContain("critical");
+      expect(loaded.config.telemetry.runNonZeroExitHardGate.enabled).toBe(true);
+      expect(loaded.config.telemetry.runNonZeroExitHardGate.threshold).toBe(2);
     } finally {
       rmSync(repoRoot, { recursive: true, force: true });
     }
@@ -209,6 +218,30 @@ describe("evaluatePolicyGates", () => {
     expect(gate.passed).toBe(false);
     expect(gate.reason).toContain("Missing operational policy review");
   });
+
+  test("blocks when telemetry hard gate threshold is reached", () => {
+    const custom: AgentixPolicyConfig = {
+      ...DEFAULT_AGENTIX_POLICY_CONFIG,
+      telemetry: {
+        runNonZeroExitHardGate: {
+          enabled: true,
+          threshold: 1,
+        },
+      },
+    };
+
+    const gate = evaluatePolicyGates({
+      tier: "medium",
+      policyConfig: custom,
+      reviewFixResolved: false,
+      securityReview: mkReview(),
+      performanceReview: mkReview(),
+      runNonZeroExitCount: 1,
+    });
+
+    expect(gate.passed).toBe(false);
+    expect(gate.reason).toContain("Operational telemetry hard gate blocked");
+  });
 });
 
 describe("isPolicyClassEnabledForTier", () => {
@@ -237,5 +270,39 @@ describe("isPolicyClassEnabledForTier", () => {
         "large",
       ),
     ).toBe(false);
+  });
+});
+
+describe("evaluateTelemetryPolicyGates", () => {
+  test("passes when hard gate is disabled", () => {
+    const gate = evaluateTelemetryPolicyGates({
+      policyConfig: DEFAULT_AGENTIX_POLICY_CONFIG,
+      runNonZeroExitCount: 5,
+    });
+
+    expect(gate.enabled).toBe(false);
+    expect(gate.passed).toBe(true);
+  });
+
+  test("blocks when run non-zero exit count meets configured threshold", () => {
+    const config: AgentixPolicyConfig = {
+      ...DEFAULT_AGENTIX_POLICY_CONFIG,
+      telemetry: {
+        runNonZeroExitHardGate: {
+          enabled: true,
+          threshold: 2,
+        },
+      },
+    };
+
+    const gate = evaluateTelemetryPolicyGates({
+      policyConfig: config,
+      runNonZeroExitCount: 2,
+    });
+
+    expect(gate.enabled).toBe(true);
+    expect(gate.passed).toBe(false);
+    expect(gate.blockedBy).toBe("run-non-zero-hard-gate");
+    expect(gate.reason).toContain("run non-zero exits 2");
   });
 });

@@ -182,6 +182,135 @@ describe("telemetry analytics parser + aggregator", () => {
     );
   });
 
+  test("supports explicit command exclusion to reduce self-observability noise", () => {
+    const now = new Date("2026-03-03T12:00:00.000Z");
+    const raw = [
+      eventLine({
+        schemaVersion: 2,
+        ts: "2026-03-03T10:00:00.000Z",
+        level: "info",
+        event: "command.started",
+        command: "analytics",
+      }),
+      eventLine({
+        schemaVersion: 2,
+        ts: "2026-03-03T10:00:01.000Z",
+        level: "info",
+        event: "command.completed",
+        command: "analytics",
+        details: { durationMs: 12 },
+      }),
+      eventLine({
+        schemaVersion: 2,
+        ts: "2026-03-03T10:02:00.000Z",
+        level: "info",
+        event: "command.started",
+        command: "run",
+      }),
+      eventLine({
+        schemaVersion: 2,
+        ts: "2026-03-03T10:03:00.000Z",
+        level: "error",
+        event: "command.failed",
+        command: "run",
+        details: { reason: "missing-smithers-cli", durationMs: 220 },
+      }),
+    ].join("\n");
+
+    const summary = analyzeTelemetryFromJsonl(raw, {
+      now,
+      window: "7d",
+      excludeCommands: ["analytics"],
+    });
+
+    expect(summary.source.excludedCommands).toEqual(["analytics"]);
+    expect(summary.commands.analytics).toBeUndefined();
+    expect(summary.commands.run).toBeDefined();
+    expect(summary.totals).toEqual({
+      started: 1,
+      completed: 0,
+      failed: 1,
+      cancelled: 0,
+      terminal: 1,
+      successRate: 0,
+      failureRate: 1,
+      cancellationRate: 0,
+    });
+  });
+
+  test("tracks multi-day drift and schema v1/v2 compatibility deterministically", () => {
+    const now = new Date("2026-03-03T23:59:59.000Z");
+    const raw = [
+      // schema v1 (no schemaVersion field)
+      eventLine({
+        ts: "2026-03-01T08:00:00.000Z",
+        level: "info",
+        event: "command.started",
+        command: "run",
+      }),
+      // schema v2
+      eventLine({
+        schemaVersion: 2,
+        ts: "2026-03-01T08:02:00.000Z",
+        level: "info",
+        event: "command.completed",
+        command: "run",
+        details: { durationMs: 100, exitCode: 0 },
+      }),
+      // schema v2 fractional should normalize to 2
+      eventLine({
+        schemaVersion: 2.9,
+        ts: "2026-03-02T09:00:00.000Z",
+        level: "error",
+        event: "command.failed",
+        command: "plan",
+        details: { reason: "missing-rfc", durationMs: 250 },
+      }),
+      // schema v1 explicit via non-numeric value
+      eventLine({
+        schemaVersion: "v1",
+        ts: "2026-03-03T11:00:00.000Z",
+        level: "info",
+        event: "command.cancelled",
+        command: "run",
+        details: { reason: "user-cancelled-pre-run-confirmation", durationMs: 40 },
+      }),
+    ].join("\n");
+
+    const summary = analyzeTelemetryFromJsonl(raw, {
+      now,
+      window: "7d",
+    });
+
+    expect(summary.source.schemaVersions).toEqual({
+      "1": 2,
+      "2": 2,
+    });
+    expect(summary.trends.daily).toEqual([
+      {
+        date: "2026-03-01",
+        started: 1,
+        completed: 1,
+        failed: 0,
+        cancelled: 0,
+      },
+      {
+        date: "2026-03-02",
+        started: 0,
+        completed: 0,
+        failed: 1,
+        cancelled: 0,
+      },
+      {
+        date: "2026-03-03",
+        started: 0,
+        completed: 0,
+        failed: 0,
+        cancelled: 1,
+      },
+    ]);
+  });
+
   test("classifies failure reasons into stable taxonomy buckets", () => {
     expect(classifyFailureTaxonomy("missing-config")).toBe("config");
     expect(classifyFailureTaxonomy("missing-smithers-cli")).toBe("environment");

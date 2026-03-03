@@ -154,6 +154,10 @@ Repo-level policy is loaded from `agentix.policy.json` (safe defaults apply when
 - Default blocking:
   - `high`/`critical`: always block
   - `medium`: block unless fixed in review-fix or accepted with rationale
+- Optional telemetry hard gate:
+  - `telemetry.runNonZeroExitHardGate.enabled`
+  - `telemetry.runNonZeroExitHardGate.threshold`
+  - when enabled, `agentix analytics summary` fails if non-zero `run` exits meet/exceed threshold
 - Policy parse/validation warnings are emitted to structured workflow output (`policy_status`) and monitor UI.
 
 ### Data Threading
@@ -199,8 +203,8 @@ This stream captures command lifecycle transitions (`started`, `completed`, `fai
 
 For aggregated telemetry intelligence:
 
-- `agentix analytics summary --window 7d`
-- `agentix analytics failures --window 7d --top 10`
+- `agentix analytics summary --window 7d --exclude-command analytics`
+- `agentix analytics failures --window 7d --top 10 --exclude-command analytics`
 
 Artifacts generated from telemetry:
 

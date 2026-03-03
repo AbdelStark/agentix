@@ -3,6 +3,10 @@ import { randomUUID } from "node:crypto";
 import { appendAgentixEvent } from "./events";
 import { getAgentixDir, type ParsedArgs } from "./shared";
 import {
+  evaluateTelemetryPolicyGates,
+  loadAgentixPolicyConfig,
+} from "../scheduled/policy";
+import {
   analyzeTelemetryFile,
   DEFAULT_ANALYTICS_WINDOW,
   DEFAULT_FAILURE_TOP,
@@ -24,12 +28,13 @@ function printHelp(writeLine: (line: string) => void): void {
   writeLine(`agentix analytics — telemetry aggregation and failure intelligence
 
 Usage:
-  agentix analytics summary --window 7d [--json] [--write-report]
-  agentix analytics failures --window 7d --top 10 [--json]
+  agentix analytics summary --window 7d [--json] [--write-report] [--exclude-command analytics]
+  agentix analytics failures --window 7d --top 10 [--json] [--exclude-command analytics]
 
 Options:
   --window <duration>         Time window like 7d, 24h, 30m (default: 7d)
   --top <n>                   Max failure rows for failures command (default: 10)
+  --exclude-command <name>    Exclude command(s) from analysis (single name or comma-separated)
   --json                      Emit machine-readable JSON
   --write-report              Generate docs/ops/quality-report.md (summary only)
   --help                      Show this help
@@ -56,6 +61,10 @@ export async function runAnalyticsCommand(opts: {
   const startedAt = now();
   const sessionId = `analytics-${startedAt.getTime().toString(36)}-${randomUUID().slice(0, 8)}`;
   const action = positional[0] ?? "summary";
+  const excludeCommands =
+    typeof flags["exclude-command"] === "string"
+      ? parseExcludeCommands(flags["exclude-command"])
+      : [];
   const agentixDir = getAgentixDir(repoRoot);
 
   await appendEvent(agentixDir, {
@@ -68,6 +77,7 @@ export async function runAnalyticsCommand(opts: {
       repoRoot,
       window: flags.window ?? DEFAULT_ANALYTICS_WINDOW,
       top: flags.top ?? DEFAULT_FAILURE_TOP,
+      excludedCommands: excludeCommands,
     },
   });
 
@@ -90,6 +100,7 @@ export async function runAnalyticsCommand(opts: {
       window,
       topFailures: top,
       excludeSessionId: sessionId,
+      excludeCommands,
     });
 
     if (action === "summary") {
@@ -101,6 +112,12 @@ export async function runAnalyticsCommand(opts: {
         ? await writeQualityReport(repoRoot, renderQualityReport(summary))
         : null;
 
+      const loadedPolicy = loadAgentixPolicyConfig(repoRoot);
+      const telemetryGate = evaluateTelemetryPolicyGates({
+        policyConfig: loadedPolicy.config,
+        runNonZeroExitCount: summary.runStability.nonZeroExitCount,
+      });
+
       if (jsonMode) {
         writeLine(
           JSON.stringify(
@@ -108,6 +125,7 @@ export async function runAnalyticsCommand(opts: {
               summary,
               snapshotPath,
               reportPath,
+              telemetryGate,
             },
             null,
             2,
@@ -119,8 +137,15 @@ export async function runAnalyticsCommand(opts: {
         writeLine(`- Failed commands: ${summary.totals.failed}`);
         writeLine(`- Success rate: ${(summary.totals.successRate * 100).toFixed(2)}%`);
         writeLine(`- Median/P95 duration: ${summary.durationsMs.median}ms / ${summary.durationsMs.p95}ms`);
+        if (excludeCommands.length > 0) {
+          writeLine(`- Excluded commands: ${excludeCommands.join(", ")}`);
+        }
         writeLine(`- Snapshot: ${snapshotPath}`);
         if (reportPath) writeLine(`- Report: ${reportPath}`);
+      }
+
+      if (!telemetryGate.passed) {
+        throw new Error(`Policy hard gate triggered: ${telemetryGate.reason}`);
       }
 
       await appendEvent(agentixDir, {
@@ -135,6 +160,10 @@ export async function runAnalyticsCommand(opts: {
           top,
           parsedEvents: summary.source.parsedEvents,
           malformedLines: summary.source.malformedLines,
+          excludedCommands: excludeCommands,
+          telemetryGateEnabled: telemetryGate.enabled,
+          telemetryGateThreshold: telemetryGate.threshold,
+          telemetryGateObserved: telemetryGate.runNonZeroExitCount,
           snapshotPath,
           reportPath,
         },
@@ -181,6 +210,7 @@ export async function runAnalyticsCommand(opts: {
         top,
         parsedEvents: summary.source.parsedEvents,
         malformedLines: summary.source.malformedLines,
+        excludedCommands: excludeCommands,
       },
     });
   } catch (error) {
@@ -205,6 +235,11 @@ export async function runAnalyticsCommand(opts: {
       exit(1);
       return;
     }
+    if (reason === "policy-run-non-zero-hard-gate") {
+      writeLine(`Error: ${message}`);
+      exit(1);
+      return;
+    }
 
     throw error;
   }
@@ -222,6 +257,16 @@ function deriveAnalyticsFailureReason(action: string, message: string): string {
   if (/top/i.test(message) && /invalid/i.test(message)) {
     return "invalid-analytics-args";
   }
+  if (/policy hard gate triggered/i.test(message)) {
+    return "policy-run-non-zero-hard-gate";
+  }
 
   return "analytics-runtime-error";
+}
+
+function parseExcludeCommands(raw: string): string[] {
+  return [...new Set(raw
+    .split(",")
+    .map((entry) => entry.trim().toLowerCase())
+    .filter(Boolean))].sort((a, b) => a.localeCompare(b));
 }

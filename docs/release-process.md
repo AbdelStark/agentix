@@ -20,9 +20,10 @@ Use this process for every tagged release.
 5. Verify release consistency:
    - `bun run release:check`
 6. Run telemetry analytics review:
-   - `bun run cli -- analytics summary --window 7d --write-report`
-   - `bun run cli -- analytics failures --window 7d --top 10`
+   - `bun run cli -- analytics summary --window 7d --write-report --exclude-command analytics`
+   - `bun run cli -- analytics failures --window 7d --top 10 --exclude-command analytics`
    - Review `docs/ops/quality-report.md` and assign owner/actions for top recurring failures.
+   - If telemetry hard gate is enabled in `agentix.policy.json`, treat summary command exit code `1` as release-blocking.
 
 ## 2. Version and Tag
 

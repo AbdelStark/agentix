@@ -1,17 +1,17 @@
 # Quality Report
 
-- Generated: 2026-03-03T14:44:26.536Z
-- Window: 7d (2026-02-24T14:44:26.536Z -> 2026-03-03T14:44:26.536Z)
+- Generated: 2026-03-03T15:04:25.573Z
+- Window: 7d (2026-02-24T15:04:25.573Z -> 2026-03-03T15:04:25.573Z)
 
 ## Core Metrics
 
-- Parsed events: 11
+- Parsed events: 5
 - Malformed lines: 0
 - Dropped events: 0
-- Success rate: 42.86%
-- Failure rate: 57.14%
+- Success rate: 0.00%
+- Failure rate: 100.00%
 - Cancellation rate: 0.00%
-- Median duration: 190ms
+- Median duration: 225ms
 - P95 duration: 980ms
 - Run resume rate: 100.00%
 - Run non-zero exits: 1
