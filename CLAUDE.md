@@ -47,6 +47,7 @@ Agentix is an opinionated agentic workflow orchestrator for production-grade sof
 - Keep schema and prompt contracts aligned; update both when fields change.
 - Prefer explicit names (`boundedContext`, `gherkinScenarios`) over abbreviations.
 - Preserve deterministic output schemas: no breaking shape changes without migration note.
+- Keep traceability fields synchronized across prompts/schemas/gates (`scenarioTrace`, `traceCompleteness`, `assertionSignals`, `antiSlopFlags`).
 </code_style>
 
 <patterns>
@@ -55,6 +56,8 @@ Agentix is an opinionated agentic workflow orchestrator for production-grade sof
 - Encode executable behavior per unit: Gherkin scenarios with Given/When/Then.
 - Enforce TDD sequencing for behavior changes.
 - Gate completion on scenario coverage and invariant safety.
+- Gate completion on trace completeness and anti-fake-green flags.
+- Generate deterministic trace artifacts at `.agentix/generated/traces/<unit-id>.json`.
 - Keep generated artifacts in `.agentix/` and logs in `.smithers/executions/` out of git.
 </do>
 <dont>

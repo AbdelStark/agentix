@@ -15,6 +15,10 @@ Use this checklist before tagging a release.
 - [ ] Work-unit schema includes DDD/BDD fields and validates sample units
 - [ ] Scenario coverage gate is active (`scenariosCovered === scenariosTotal`)
 - [ ] Merge queue readiness still blocks uncovered scenarios
+- [ ] Test output contract includes trace matrix fields (`scenarioTrace`, `traceCompleteness`, `assertionSignals`, `antiSlopFlags`)
+- [ ] Tier gate blocks when `traceCompleteness !== true`
+- [ ] Tier gate blocks on blocking anti-slop flags
+- [ ] Trace artifacts are generated for merge-eligible units at `.agentix/generated/traces/<unit-id>.json`
 
 ## Runtime Safety
 

@@ -133,9 +133,10 @@ Each work unit now carries:
 
 - `boundedContext` + `ubiquitousLanguage` + `domainInvariants` (DDD)
 - `gherkinFeature` + `gherkinScenarios` (BDD executable spec)
-- test-phase scenario coverage metrics (`scenariosTotal`, `scenariosCovered`, `uncoveredScenarios`) used by merge readiness gates (TDD/BDD enforcement)
+- test-phase scenario coverage + trace proof metrics (`scenariosTotal`, `scenariosCovered`, `uncoveredScenarios`, `scenarioTrace`, `traceCompleteness`, `assertionSignals`, `antiSlopFlags`) used by merge readiness gates (TDD/BDD enforcement)
 
 Units are blocked from completion when scenario coverage is incomplete.
+Units are also blocked when trace completeness fails or blocking anti-slop flags are present.
 
 ### Data Threading
 
@@ -147,10 +148,14 @@ plan.implementationSteps → implement
 unit.{boundedContext,domainInvariants,gherkinScenarios} → research, plan, implement, test, final-review
 implement.{filesCreated, filesModified, whatWasDone} → test, reviews
 test.{buildPassed, failingSummary, scenariosCovered, uncoveredScenarios} → reviews, implement (next pass), final-review
+test.{scenarioTrace, traceCompleteness, assertionSignals, antiSlopFlags} → tier gate + anti-fake-green checks + trace artifacts
 reviews.{feedback, issues} → review-fix → implement (next pass)
 final-review.reasoning → implement (next pass)
 evictionContext → implement (after merge conflict)
 ```
+
+For each merge-eligible unit, Agentix writes a deterministic trace artifact to:
+- `.agentix/generated/traces/<unit-id>.json`
 
 ### Merge Queue
 
