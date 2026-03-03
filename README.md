@@ -248,6 +248,7 @@ Speed is valuable, but only when correctness, testability, and maintainability a
 - [Observability](docs/observability.md)
 - [Agentix Excellence Thesis](docs/agentic-excellence-thesis.md)
 - [Agentix Excellence Roadmap](docs/agentic-excellence-roadmap.md)
+- [Production Execution Plans](docs/execution-plans/README.md)
 
 ## References
 
@@ -301,6 +302,13 @@ src/
 docs/
 ├── agentic-excellence-thesis.md
 ├── agentic-excellence-roadmap.md
+├── execution-plans/
+│   ├── 01-cli-integration-test-harness.md
+│   ├── 02-scenario-trace-matrix-and-anti-slop.md
+│   ├── 03-security-performance-policy-gates.md
+│   ├── 04-merge-queue-risk-scoring-and-ordering.md
+│   ├── 05-telemetry-aggregation-and-analytics-loop.md
+│   └── README.md
 ├── observability.md
 ├── production-readiness-checklist.md
 └── release-process.md

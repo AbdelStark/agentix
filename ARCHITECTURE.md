@@ -11,4 +11,5 @@ Technical documentation for the Agentix multi-agent development pipeline.
 | **[docs/production-readiness-checklist.md](docs/production-readiness-checklist.md)** | Release gate checklist for production readiness. |
 | **[docs/release-process.md](docs/release-process.md)** | End-to-end release workflow and publish gates. |
 | **[docs/observability.md](docs/observability.md)** | Command telemetry format and debugging usage. |
+| **[docs/execution-plans/README.md](docs/execution-plans/README.md)** | Detailed implementation plans for upcoming production hardening milestones. |
 | **[CONTRIBUTING.md](CONTRIBUTING.md)** | Contributor workflow and quality standards. |

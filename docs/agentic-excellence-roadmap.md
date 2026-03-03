@@ -44,10 +44,19 @@ Build an opinionated agentic orchestrator that consistently produces production-
 
 ## Prioritized Next Milestones
 
-1. Spec compiler hardening (Phase 2): enforce scenario traceability and anti-ambiguity linting.
-2. Test integrity instrumentation (Phase 3): add scenario-to-test trace matrix artifacts and anti-fake-green checks.
+1. CLI integration harness hardening: deterministic command-level tests across `init/plan/run/resume/status/monitor`.
+2. Spec compiler hardening (Phase 2): enforce scenario traceability and anti-ambiguity linting.
 3. Production controls (Phase 4): introduce security/performance policy gates and conflict-risk scoring in merge queue.
 4. Learning loop bootstrap (Phase 5): ingest failure patterns from `events.jsonl` and review outputs into reusable skills.
+
+## Detailed Execution Plans
+
+- [Execution Plan Index](execution-plans/README.md)
+- [Plan 01: CLI Integration Test Harness](execution-plans/01-cli-integration-test-harness.md)
+- [Plan 02: Scenario Trace Matrix + Anti-Fake-Green Gates](execution-plans/02-scenario-trace-matrix-and-anti-slop.md)
+- [Plan 03: Security + Performance Policy Gates](execution-plans/03-security-performance-policy-gates.md)
+- [Plan 04: Merge Queue Risk Scoring + Smart Ordering](execution-plans/04-merge-queue-risk-scoring-and-ordering.md)
+- [Plan 05: Telemetry Aggregation + Analytics Feedback Loop](execution-plans/05-telemetry-aggregation-and-analytics-loop.md)
 
 ## Acceptance Criteria for the Roadmap
 
