@@ -1,8 +1,9 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
-      "name": "super-ralph",
+      "name": "agentix",
       "dependencies": {
         "@opentui/core": "^0.1.81",
         "better-sqlite3": "^11.0.0",

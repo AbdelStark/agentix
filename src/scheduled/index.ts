@@ -6,11 +6,11 @@ export { scheduledOutputSchemas } from "./schemas";
 export {
   type WorkPlan,
   type WorkUnit,
-  type RalphinhoConfig,
+  type AgentixConfig,
   type ScheduledTier,
   workPlanSchema,
   workUnitSchema,
-  ralphinhoConfigSchema,
+  agentixConfigSchema,
   SCHEDULED_TIERS,
   validateDAG,
   computeLayers,

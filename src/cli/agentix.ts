@@ -1,30 +1,30 @@
 #!/usr/bin/env bun
 /**
- * ralphinho — RFC-driven AI development workflow CLI
+ * agentix — RFC-driven AI development workflow CLI
  *
  * Commands:
- *   ralphinho init ./rfc.md            Initialize workflow from RFC
- *   ralphinho plan                     (Re)generate work plan from RFC
- *   ralphinho run                      Execute the initialized workflow
- *   ralphinho run --resume <run-id>    Resume a previous run
- *   ralphinho monitor                  Attach TUI to running workflow
- *   ralphinho status                   Show current state
+ *   agentix init ./rfc.md            Initialize workflow from RFC
+ *   agentix plan                     (Re)generate work plan from RFC
+ *   agentix run                      Execute the initialized workflow
+ *   agentix run --resume <run-id>    Resume a previous run
+ *   agentix monitor                  Attach TUI to running workflow
+ *   agentix status                   Show current state
  */
 
 import { resolve } from "node:path";
 import { parseArgs } from "./shared";
 
 function printHelp() {
-  console.log(`ralphinho — RFC-driven AI development workflow CLI
+  console.log(`agentix — RFC-driven AI development workflow CLI
 
 Usage:
-  ralphinho init ./rfc-003.md
+  agentix init ./rfc-003.md
 
-  ralphinho plan                             (Re)generate work plan from RFC
-  ralphinho run                              Execute the initialized workflow
-  ralphinho run --resume <run-id>            Resume a previous run
-  ralphinho monitor                          Attach TUI to running workflow
-  ralphinho status                           Show current state
+  agentix plan                             (Re)generate work plan from RFC
+  agentix run                              Execute the initialized workflow
+  agentix run --resume <run-id>            Resume a previous run
+  agentix monitor                          Attach TUI to running workflow
+  agentix status                           Show current state
 
 Global Options:
   --cwd <path>                Repo root (default: current directory)
@@ -35,10 +35,10 @@ Init Options:
   --dry-run                   Generate work plan but don't execute
 
 Examples:
-  ralphinho init ./docs/rfc-003.md
-  ralphinho plan
-  ralphinho run
-  ralphinho run --resume sw-m3abc12-deadbeef
+  agentix init ./docs/rfc-003.md
+  agentix plan
+  agentix run
+  agentix run --resume sw-m3abc12-deadbeef
 `);
 }
 
@@ -95,7 +95,7 @@ async function main() {
       }
 
       console.error(
-        `Unknown command: "${command}". Run "ralphinho --help" for usage.`,
+        `Unknown command: "${command}". Run "agentix --help" for usage.`,
       );
       process.exit(1);
     }

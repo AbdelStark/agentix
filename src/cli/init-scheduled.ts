@@ -1,11 +1,11 @@
 /**
- * ralphinho init scheduled-work — Initialize an RFC-driven workflow.
+ * agentix init scheduled-work — Initialize an RFC-driven workflow.
  *
  * 1. Reads the RFC file
  * 2. Scans the repo for build/test commands
  * 3. Detects available agents
  * 4. AI decomposes RFC into work units + dependency DAG
- * 5. Writes .ralphinho/config.json and .ralphinho/work-plan.json
+ * 5. Writes .agentix/config.json and .agentix/work-plan.json
  * 6. Prints summary
  */
 
@@ -17,13 +17,13 @@ import {
   detectAgents,
   detectCurrentBranch,
   ensureJjColocated,
-  getRalphDir,
-  ralphSourceRoot,
+  getAgentixDir,
+  agentixSourceRoot,
   scanRepo,
   type ParsedArgs,
 } from "./shared";
 import { decomposeRFC, printPlanSummary } from "../scheduled/decompose";
-import type { RalphinhoConfig } from "../scheduled/types";
+import type { AgentixConfig } from "../scheduled/types";
 import { renderScheduledWorkflow } from "./render-scheduled-workflow";
 
 export async function initScheduledWork(opts: {
@@ -33,13 +33,13 @@ export async function initScheduledWork(opts: {
 }): Promise<void> {
   const { positional, flags, repoRoot } = opts;
 
-  console.log("🗂️  ralphinho — Scheduled Work Mode\n");
+  console.log("🗂️  agentix — Scheduled Work Mode\n");
 
   // ── Read RFC file ───────────────────────────────────────────────────
   const rfcArg = positional[0];
   if (!rfcArg) {
     console.error("Error: RFC file path is required.");
-    console.error("Usage: ralphinho init ./path/to/rfc.md");
+    console.error("Usage: agentix init ./path/to/rfc.md");
     process.exit(1);
   }
 
@@ -93,8 +93,8 @@ export async function initScheduledWork(opts: {
   printPlanSummary(plan, layers);
 
   // ── Write outputs ───────────────────────────────────────────────────
-  const ralphDir = getRalphDir(repoRoot);
-  await mkdir(ralphDir, { recursive: true });
+  const agentixDir = getAgentixDir(repoRoot);
+  await mkdir(agentixDir, { recursive: true });
 
   const maxConcurrency =
     typeof flags["max-concurrency"] === "string"
@@ -107,7 +107,7 @@ export async function initScheduledWork(opts: {
       : await detectCurrentBranch(repoRoot);
   console.log(`  Base branch: ${baseBranch}`);
 
-  const config: RalphinhoConfig = {
+  const config: AgentixConfig = {
     mode: "scheduled-work",
     repoRoot,
     rfcPath,
@@ -117,14 +117,14 @@ export async function initScheduledWork(opts: {
     createdAt: new Date().toISOString(),
   };
 
-  const configPath = join(ralphDir, "config.json");
-  const planPath = join(ralphDir, "work-plan.json");
+  const configPath = join(agentixDir, "config.json");
+  const planPath = join(agentixDir, "work-plan.json");
 
   await writeFile(configPath, JSON.stringify(config, null, 2) + "\n", "utf8");
   await writeFile(planPath, JSON.stringify(plan, null, 2) + "\n", "utf8");
 
   // ── Generate workflow file ──────────────────────────────────────────
-  const generatedDir = join(ralphDir, "generated");
+  const generatedDir = join(agentixDir, "generated");
   await mkdir(generatedDir, { recursive: true });
 
   const workflowPath = join(generatedDir, "workflow.tsx");
@@ -134,7 +134,7 @@ export async function initScheduledWork(opts: {
 
   // Ensure node_modules symlink so the generated file can resolve imports
   const generatedNodeModules = join(generatedDir, "node_modules");
-  const sourceNodeModules = join(ralphSourceRoot, "node_modules");
+  const sourceNodeModules = join(agentixSourceRoot, "node_modules");
   if (!existsSync(generatedNodeModules) && existsSync(sourceNodeModules)) {
     try {
       const { symlinkSync } = await import("fs");
@@ -152,7 +152,7 @@ export async function initScheduledWork(opts: {
   console.log(
     `  Review and edit ${planPath} if needed, then run:`,
   );
-  console.log(`    ralphinho run`);
+  console.log(`    agentix run`);
   console.log();
 
   if (flags["dry-run"]) {

@@ -1,7 +1,7 @@
 /**
- * ralphinho run — Execute or resume a scheduled workflow.
+ * agentix run — Execute or resume a scheduled workflow.
  *
- * Reads .ralphinho/config.json and the generated workflow file,
+ * Reads .agentix/config.json and the generated workflow file,
  * then launches execution.
  */
 
@@ -12,20 +12,20 @@ import { randomUUID } from "node:crypto";
 
 import {
   findSmithersCliPath,
-  getRalphDir,
+  getAgentixDir,
   launchSmithers,
   promptChoice,
   type ParsedArgs,
 } from "./shared";
-import { ralphinhoConfigSchema, type RalphinhoConfig } from "../scheduled/types";
+import { agentixConfigSchema, type AgentixConfig } from "../scheduled/types";
 
 export async function runWorkflow(opts: {
   flags: ParsedArgs["flags"];
   repoRoot: string;
 }): Promise<void> {
   const { flags, repoRoot } = opts;
-  const ralphDir = getRalphDir(repoRoot);
-  const configPath = join(ralphDir, "config.json");
+  const agentixDir = getAgentixDir(repoRoot);
+  const configPath = join(agentixDir, "config.json");
 
   const resumeRunId =
     typeof flags.resume === "string" ? flags.resume : null;
@@ -33,12 +33,12 @@ export async function runWorkflow(opts: {
   // ── Load config ─────────────────────────────────────────────────────
   if (!existsSync(configPath)) {
     console.error(
-      "Error: No workflow initialized. Run `ralphinho init` first.",
+      "Error: No workflow initialized. Run `agentix init` first.",
     );
     process.exit(1);
   }
 
-  const config: RalphinhoConfig = ralphinhoConfigSchema.parse(
+  const config: AgentixConfig = agentixConfigSchema.parse(
     JSON.parse(await readFile(configPath, "utf8")),
   );
 
@@ -57,21 +57,21 @@ export async function runWorkflow(opts: {
       : config.maxConcurrency;
 
   // ── Execute scheduled work ──────────────────────────────────────────
-  const planPath = join(ralphDir, "work-plan.json");
+  const planPath = join(agentixDir, "work-plan.json");
   if (!existsSync(planPath)) {
     console.error(
-      "Error: No work plan found. Run `ralphinho plan` or `ralphinho init` first.",
+      "Error: No work plan found. Run `agentix plan` or `agentix init` first.",
     );
     process.exit(1);
   }
 
-  const dbPath = join(ralphDir, "workflow.db");
-  const generatedDir = join(ralphDir, "generated");
+  const dbPath = join(agentixDir, "workflow.db");
+  const generatedDir = join(agentixDir, "generated");
   const workflowPath = join(generatedDir, "workflow.tsx");
 
   if (!existsSync(workflowPath)) {
     console.error(
-      "Error: No workflow file found. Run `ralphinho init` first.",
+      "Error: No workflow file found. Run `agentix init` first.",
     );
     process.exit(1);
   }
@@ -133,7 +133,7 @@ export async function runWorkflow(opts: {
   const plan = JSON.parse(await readFile(planPath, "utf8"));
   const unitCount = plan.units?.length ?? 0;
 
-  console.log(`\n🚀 ralphinho — Scheduled Work\n`);
+  console.log(`\n🚀 agentix — Scheduled Work\n`);
   console.log(`  RFC: ${config.rfcPath}`);
   console.log(`  Work units: ${unitCount}`);
   console.log(`  Max concurrency: ${maxConcurrency}`);

@@ -10,9 +10,9 @@ import { fileURLToPath } from "node:url";
 // ── Path detection ────────────────────────────────────────────────────
 
 const cliDir = import.meta.dir || dirname(fileURLToPath(import.meta.url));
-export const ralphSourceRoot = dirname(dirname(cliDir));
+export const agentixSourceRoot = dirname(dirname(cliDir));
 export const runningFromSource = existsSync(
-  join(ralphSourceRoot, "src/components/ScheduledWorkflow.tsx"),
+  join(agentixSourceRoot, "src/components/ScheduledWorkflow.tsx"),
 );
 
 // ── Arg parsing ───────────────────────────────────────────────────────
@@ -169,7 +169,7 @@ export async function ensureJjColocated(repoRoot: string) {
   if (!installed) {
     throw new Error(
       [
-        "jj is required before ralphinho can run.",
+        "jj is required before agentix can run.",
         "Install jj, then rerun this command.",
         "",
         "Install options:",
@@ -382,7 +382,7 @@ export async function launchSmithers(opts: {
 
   let execCwd: string;
   if (runningFromSource) {
-    execCwd = ralphSourceRoot;
+    execCwd = agentixSourceRoot;
   } else {
     const smithersDir = dirname(dirname(smithersCliPath));
     execCwd = existsSync(join(smithersDir, "node_modules"))
@@ -390,11 +390,11 @@ export async function launchSmithers(opts: {
       : repoRoot;
   }
 
-  const superRalphPreload = join(ralphSourceRoot, "preload.ts");
-  const useSharedPreload = existsSync(superRalphPreload);
+  const sharedPreload = join(agentixSourceRoot, "preload.ts");
+  const useSharedPreload = existsSync(sharedPreload);
   const preloadPath = join(dirname(workflowPath), "preload.ts");
   const effectivePreload = useSharedPreload
-    ? superRalphPreload
+    ? sharedPreload
     : preloadPath;
 
   const args = [
@@ -455,11 +455,11 @@ export async function promptChoice(
   return choice - 1;
 }
 
-// ── .ralphinho directory ──────────────────────────────────────────────
+// ── .agentix directory ──────────────────────────────────────────────
 
-/** The project directory name for ralphinho artifacts */
-export const RALPHINHO_DIR = ".ralphinho";
+/** The project directory name for agentix artifacts */
+export const AGENTIX_DIR = ".agentix";
 
-export function getRalphDir(repoRoot: string): string {
-  return join(repoRoot, RALPHINHO_DIR);
+export function getAgentixDir(repoRoot: string): string {
+  return join(repoRoot, AGENTIX_DIR);
 }

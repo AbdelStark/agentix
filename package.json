@@ -1,13 +1,13 @@
 {
-  "name": "super-ralph",
+  "name": "agentix",
   "version": "0.3.1",
-  "description": "Reusable Ralph workflow pattern - ticket-driven development with multi-agent review loops",
+  "description": "Reusable Agentix workflow pattern - ticket-driven development with multi-agent review loops",
   "author": "William Cory",
   "license": "MIT",
   "type": "module",
   "module": "src/index.ts",
   "bin": {
-    "ralphinho": "src/cli/ralphinho.ts"
+    "agentix": "src/cli/agentix.ts"
   },
   "exports": {
     ".": "./src/index.ts",
@@ -25,17 +25,17 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/evmts/super-ralph.git"
+    "url": "https://github.com/AbdelStark/agentix.git"
   },
   "bugs": {
-    "url": "https://github.com/evmts/super-ralph/issues"
+    "url": "https://github.com/AbdelStark/agentix/issues"
   },
-  "homepage": "https://github.com/evmts/super-ralph#readme",
+  "homepage": "https://github.com/AbdelStark/agentix#readme",
   "keywords": [
     "ai",
     "workflow",
     "orchestration",
-    "ralph",
+    "agentix",
     "multi-agent",
     "tdd",
     "code-review"
@@ -43,7 +43,7 @@
   "scripts": {
     "gen:mdx-types": "bun scripts/gen-mdx-types.ts",
     "typecheck": "bun scripts/gen-mdx-types.ts && tsc --noEmit",
-    "cli": "bun run src/cli/ralphinho.ts"
+    "cli": "bun run src/cli/agentix.ts"
   },
   "peerDependencies": {
     "smithers-orchestrator": "^0.9.0"

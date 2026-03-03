@@ -1,9 +1,9 @@
 #!/bin/bash
-# Quick test of the refactored Super Ralph CLI
+# Quick test of the refactored Agentix CLI
 
 set -e
 
-echo "🧪 Testing Super Ralph Refactored CLI"
+echo "🧪 Testing Agentix Refactored CLI"
 echo "======================================"
 echo ""
 
@@ -21,21 +21,21 @@ echo ""
 
 # Test 3: Check generated files
 echo "Test 3: Verify generated files exist"
-if [ -f "/tmp/test-sr/.super-ralph/generated/workflow.tsx" ]; then
+if [ -f "/tmp/test-sr/.agentix/generated/workflow.tsx" ]; then
   echo "✅ workflow.tsx generated"
 else
   echo "❌ workflow.tsx missing"
   exit 1
 fi
 
-if [ -f "/tmp/test-sr/.super-ralph/generated/preload.ts" ]; then
+if [ -f "/tmp/test-sr/.agentix/generated/preload.ts" ]; then
   echo "✅ preload.ts generated"
 else
   echo "❌ preload.ts missing"
   exit 1
 fi
 
-if [ -f "/tmp/test-sr/.super-ralph/generated/bunfig.toml" ]; then
+if [ -f "/tmp/test-sr/.agentix/generated/bunfig.toml" ]; then
   echo "✅ bunfig.toml generated"
 else
   echo "❌ bunfig.toml missing"
@@ -44,35 +44,35 @@ fi
 
 echo ""
 echo "Test 4: Verify workflow structure"
-if grep -q "ClarifyingQuestions" /tmp/test-sr/.super-ralph/generated/workflow.tsx; then
+if grep -q "ClarifyingQuestions" /tmp/test-sr/.agentix/generated/workflow.tsx; then
   echo "✅ ClarifyingQuestions component present"
 else
   echo "❌ ClarifyingQuestions component missing"
   exit 1
 fi
 
-if grep -q "InterpretConfig" /tmp/test-sr/.super-ralph/generated/workflow.tsx; then
+if grep -q "InterpretConfig" /tmp/test-sr/.agentix/generated/workflow.tsx; then
   echo "✅ InterpretConfig component present"
 else
   echo "❌ InterpretConfig component missing"
   exit 1
 fi
 
-if grep -q "Monitor" /tmp/test-sr/.super-ralph/generated/workflow.tsx; then
+if grep -q "Monitor" /tmp/test-sr/.agentix/generated/workflow.tsx; then
   echo "✅ Monitor component present"
 else
   echo "❌ Monitor component missing"
   exit 1
 fi
 
-if grep -q "SuperRalph" /tmp/test-sr/.super-ralph/generated/workflow.tsx; then
-  echo "✅ SuperRalph component present"
+if grep -q "Agentix" /tmp/test-sr/.agentix/generated/workflow.tsx; then
+  echo "✅ Agentix component present"
 else
-  echo "❌ SuperRalph component missing"
+  echo "❌ Agentix component missing"
   exit 1
 fi
 
-if grep -q "<Parallel>" /tmp/test-sr/.super-ralph/generated/workflow.tsx; then
+if grep -q "<Parallel>" /tmp/test-sr/.agentix/generated/workflow.tsx; then
   echo "✅ Parallel execution structure present"
 else
   echo "❌ Parallel execution missing"
@@ -83,4 +83,4 @@ echo ""
 echo "🎉 All tests passed!"
 echo ""
 echo "Generated workflow:"
-head -50 /tmp/test-sr/.super-ralph/generated/workflow.tsx
+head -50 /tmp/test-sr/.agentix/generated/workflow.tsx

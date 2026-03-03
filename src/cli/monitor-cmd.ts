@@ -1,34 +1,34 @@
 /**
- * ralphinho monitor — Attach TUI to a running or completed workflow.
+ * agentix monitor — Attach TUI to a running or completed workflow.
  */
 
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 
-import { getRalphDir, type ParsedArgs } from "./shared";
-import { ralphinhoConfigSchema } from "../scheduled/types";
+import { getAgentixDir, type ParsedArgs } from "./shared";
+import { agentixConfigSchema } from "../scheduled/types";
 
 export async function runMonitor(opts: {
   flags: ParsedArgs["flags"];
   repoRoot: string;
 }): Promise<void> {
   const { repoRoot } = opts;
-  const ralphDir = getRalphDir(repoRoot);
-  const configPath = join(ralphDir, "config.json");
+  const agentixDir = getAgentixDir(repoRoot);
+  const configPath = join(agentixDir, "config.json");
 
   if (!existsSync(configPath)) {
-    console.error("Error: No ralphinho workflow found. Run `ralphinho init` first.");
+    console.error("Error: No agentix workflow found. Run `agentix init` first.");
     process.exit(1);
   }
 
-  const config = ralphinhoConfigSchema.parse(
+  const config = agentixConfigSchema.parse(
     JSON.parse(await readFile(configPath, "utf8")),
   );
 
-  const dbPath = join(ralphDir, "workflow.db");
+  const dbPath = join(agentixDir, "workflow.db");
   if (!existsSync(dbPath)) {
-    console.error("Error: No workflow database found. Run `ralphinho run` first.");
+    console.error("Error: No workflow database found. Run `agentix run` first.");
     process.exit(1);
   }
 

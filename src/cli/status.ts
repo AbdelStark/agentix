@@ -1,30 +1,30 @@
 /**
- * ralphinho status — Show current workflow state.
+ * agentix status — Show current workflow state.
  */
 
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 
-import { getRalphDir } from "./shared";
-import { ralphinhoConfigSchema } from "../scheduled/types";
+import { getAgentixDir } from "./shared";
+import { agentixConfigSchema } from "../scheduled/types";
 
 export async function runStatus(opts: { repoRoot: string }): Promise<void> {
   const { repoRoot } = opts;
-  const ralphDir = getRalphDir(repoRoot);
-  const configPath = join(ralphDir, "config.json");
+  const agentixDir = getAgentixDir(repoRoot);
+  const configPath = join(agentixDir, "config.json");
 
   if (!existsSync(configPath)) {
-    console.log("No ralphinho workflow initialized in this directory.\n");
-    console.log("Run `ralphinho init` to get started.");
+    console.log("No agentix workflow initialized in this directory.\n");
+    console.log("Run `agentix init` to get started.");
     return;
   }
 
-  const config = ralphinhoConfigSchema.parse(
+  const config = agentixConfigSchema.parse(
     JSON.parse(await readFile(configPath, "utf8")),
   );
 
-  console.log(`ralphinho — Status\n`);
+  console.log(`agentix — Status\n`);
   console.log(`  Mode: ${config.mode}`);
   console.log(`  Repo: ${config.repoRoot}`);
   console.log(`  Created: ${config.createdAt}`);
@@ -33,7 +33,7 @@ export async function runStatus(opts: { repoRoot: string }): Promise<void> {
   );
 
   if (config.mode === "scheduled-work") {
-    const planPath = join(ralphDir, "work-plan.json");
+    const planPath = join(agentixDir, "work-plan.json");
     if (existsSync(planPath)) {
       const plan = JSON.parse(await readFile(planPath, "utf8"));
       console.log(`  RFC: ${config.rfcPath}`);
@@ -43,7 +43,7 @@ export async function runStatus(opts: { repoRoot: string }): Promise<void> {
     }
   }
 
-  const dbPath = join(ralphDir, "workflow.db");
+  const dbPath = join(agentixDir, "workflow.db");
   if (existsSync(dbPath)) {
     const latestRunId = getLatestRunId(dbPath);
     if (latestRunId) {
@@ -51,7 +51,7 @@ export async function runStatus(opts: { repoRoot: string }): Promise<void> {
     }
   }
 
-  const workflowPath = join(ralphDir, "generated", "workflow.tsx");
+  const workflowPath = join(agentixDir, "generated", "workflow.tsx");
   console.log(
     `  Workflow generated: ${existsSync(workflowPath) ? "yes" : "no"}`,
   );

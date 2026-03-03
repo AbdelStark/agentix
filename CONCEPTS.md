@@ -1,12 +1,12 @@
 # Concepts
 
-Common infrastructure shared by all Super-Ralph-Lite workflows.
+Common infrastructure shared by all Agentix workflows.
 
 ---
 
 ## Table of Contents
 
-1. [What Is Super-Ralph-Lite](#1-what-is-super-ralph-lite)
+1. [What Is Agentix](#1-what-is-agentix)
 2. [The Smithers Engine](#2-the-smithers-engine)
 3. [Agent System](#3-agent-system)
 4. [jj (Jujutsu) VCS Integration](#4-jj-jujutsu-vcs-integration)
@@ -19,16 +19,16 @@ Common infrastructure shared by all Super-Ralph-Lite workflows.
 
 ---
 
-## 1. What Is Super-Ralph-Lite
+## 1. What Is Agentix
 
-Super-Ralph-Lite is a multi-agent AI development pipeline built on the Smithers workflow engine. It takes a description of work to be done on a codebase and runs it through a configurable pipeline of AI agents (research, plan, implement, test, review, land).
+Agentix is a multi-agent AI development pipeline built on the Smithers workflow engine. It takes a description of work to be done on a codebase and runs it through a configurable pipeline of AI agents (research, plan, implement, test, review, land).
 
 Two workflow modes exist:
 
 | Mode | Input | Scheduling | See |
 |------|-------|-----------|-----|
-| **Super-Ralph** | Free-form prompt | AI-driven (dynamic discovery + scheduler) | [SUPER_RALPH.md](SUPER_RALPH.md) |
-| **Scheduled Work** | RFC/PRD document | Deterministic DAG (pre-planned) | [RALPHINHO.md](RALPHINHO.md) |
+| **Agentix** | Free-form prompt | AI-driven (dynamic discovery + scheduler) | [AGENTIX.md](AGENTIX.md) |
+| **Scheduled Work** | RFC/PRD document | Deterministic DAG (pre-planned) | [AGENTIX.md](AGENTIX.md) |
 
 Both modes share the same core infrastructure documented here: the Smithers engine, agent system, jj VCS, worktree isolation, complexity tiers, quality pipeline stages, and merge queue.
 
@@ -41,7 +41,7 @@ Both modes share the same core infrastructure documented here: the Smithers engi
 | Database | SQLite (Drizzle ORM for Smithers, raw bun:sqlite for job queues) |
 | Schema validation | Zod |
 | VCS | jj (Jujutsu) exclusively, no git fallback |
-| Prompt templates | MDX (SuperRalph), template literals (ScheduledWork) |
+| Prompt templates | MDX (Agentix), template literals (ScheduledWork) |
 | Agents | ClaudeCodeAgent (claude-sonnet-4-6 / claude-opus-4-6), CodexAgent (gpt-5.3-codex) |
 
 ---
@@ -84,7 +84,7 @@ ctx.outputMaybe(schemaKey, nodeId) // Like latest(), but returns undefined inste
 ctx.runId                       // Current run identifier
 ```
 
-All outputs are keyed by `(run_id, node_id, iteration)` in SQLite. This allows reading results from prior iterations and, in SuperRalph's case, from prior runs.
+All outputs are keyed by `(run_id, node_id, iteration)` in SQLite. This allows reading results from prior iterations and, in Agentix's case, from prior runs.
 
 ### Output Schemas
 
@@ -118,7 +118,7 @@ Both are CLI wrappers -- Smithers spawns the agent CLI as a subprocess with a pr
 Both workflows detect available agents at init time (`detectAgents()` checks `which claude`, `which codex`, `which gh`). The selection logic follows a preference-with-fallback pattern:
 
 ```typescript
-// SuperRalph: choose(primary, systemPrompt)
+// Agentix: choose(primary, systemPrompt)
 function choose(primary: "claude" | "codex", systemPrompt: string) {
   if (primary === "claude" && HAS_CLAUDE) return createClaude(systemPrompt);
   if (primary === "codex" && HAS_CODEX)   return createCodex(systemPrompt);
@@ -156,7 +156,7 @@ Each work unit (ticket or unit) gets a bookmark:
 
 | Workflow | Pattern | Example |
 |----------|---------|---------|
-| SuperRalph | `ticket/{ticketId}` | `ticket/T-1` |
+| Agentix | `ticket/{ticketId}` | `ticket/T-1` |
 | ScheduledWork | `unit/{unitId}` | `unit/metadata-cleanup` |
 
 ### Common jj Commands
@@ -209,8 +209,8 @@ Smithers creates a `jj workspace add` at the given path. The `cwd` for the agent
 | Scope | Worktree Path |
 |-------|---------------|
 | Per-ticket/unit pipeline stages | `/tmp/workflow-wt-{id}` |
-| Discovery jobs (SuperRalph) | `/tmp/workflow-wt-discovery` |
-| Progress updates (SuperRalph) | `/tmp/workflow-wt-progress-update` |
+| Discovery jobs (Agentix) | `/tmp/workflow-wt-discovery` |
+| Progress updates (Agentix) | `/tmp/workflow-wt-progress-update` |
 
 **Critical**: Pipeline stages for the same work unit share a single worktree. If unit X runs research then implement, both run in `/tmp/workflow-wt-X`. This preserves working state (context files, plan files, code changes) across stages.
 
@@ -231,7 +231,7 @@ Every work unit is assigned a complexity tier that determines which quality pipe
 
 | Tier | Description |
 |------|-------------|
-| `trivial` | Single-file change, no tests needed (SuperRalph) or basic test only (ScheduledWork) |
+| `trivial` | Single-file change, no tests needed (Agentix) or basic test only (ScheduledWork) |
 | `small` | Few files, needs tests + basic review |
 | `medium` | Multi-file, full pipeline with research/plan/review |
 | `large` | Complex, full pipeline with all quality gates |
@@ -240,12 +240,12 @@ See each workflow's documentation for the exact stage lists per tier.
 
 ### Tier Assignment
 
-- **SuperRalph**: Tiers are assigned by the AI during ticket discovery. The Discover prompt instructs the agent to default to the smallest appropriate tier.
+- **Agentix**: Tiers are assigned by the AI during ticket discovery. The Discover prompt instructs the agent to default to the smallest appropriate tier.
 - **ScheduledWork**: Tiers are assigned by the AI during RFC decomposition. The decompose system prompt defines tier criteria.
 
 ### Tier Enforcement
 
-In both workflows, tier enforcement is **prompt-level only**. The scheduler (SuperRalph) or rendered workflow (ScheduledWork) respects tier definitions, but no hard runtime check prevents a stage from running outside its tier.
+In both workflows, tier enforcement is **prompt-level only**. The scheduler (Agentix) or rendered workflow (ScheduledWork) respects tier definitions, but no hard runtime check prevents a stage from running outside its tier.
 
 ---
 
@@ -265,7 +265,7 @@ Both workflows share the same conceptual pipeline, though the exact stages and t
 | **Plan** | Design implementation approach with atomic steps | Plan document (committed to repo) |
 | **Implement** | Write code following the plan, using TDD where applicable | Code changes (committed and pushed) |
 | **Test** | Run test suites, fix failures | Pass/fail report |
-| **Build Verify** | Run builds, fix compilation errors (SuperRalph only) | Build status |
+| **Build Verify** | Run builds, fix compilation errors (Agentix only) | Build status |
 | **Spec/PRD Review** | Check implementation against specifications | Severity + issues list |
 | **Code Review** | Check code quality (security, style, coverage, architecture) | Severity + issues list |
 | **Review Fix** | Address issues raised by reviews | Resolution summary |
@@ -318,14 +318,14 @@ When a unit is evicted:
 
 ## 9. Two-Database Architecture
 
-### Smithers DB (`.ralphinho/workflow.db` or `.super-ralph/workflow.db`)
+### Smithers DB (`.agentix/workflow.db` or `.agentix/workflow.db`)
 
 Managed by Smithers via Drizzle ORM. Stores:
 - All task outputs (one table per Zod schema key)
 - Internal tables: `_smithers_runs`, `_smithers_frames`, `_smithers_attempts`, `_smithers_nodes`, `_smithers_approvals`
 - Each row has `run_id`, `node_id`, `iteration` columns
 
-### Scheduled Tasks DB (`scheduled-tasks.db`) — SuperRalph Only
+### Scheduled Tasks DB (`scheduled-tasks.db`) — Agentix Only
 
 A separate SQLite database for tracking the active job queue. Exists because Smithers has no native job queue concept:
 
@@ -348,16 +348,16 @@ ScheduledWork does not need this database because its execution order is determi
 
 ### Entry Point
 
-`ralphinho` is the unified CLI (`src/cli/ralphinho.ts`), registered as the package bin.
+`agentix` is the unified CLI (`src/cli/agentix.ts`), registered as the package bin.
 
 ```
-ralphinho init super-ralph "prompt"       # Initialize intent-driven workflow
-ralphinho init scheduled-work ./rfc.md    # Initialize RFC-driven workflow
-ralphinho plan                            # (Re)generate work plan (scheduled-work only)
-ralphinho run                             # Execute the initialized workflow
-ralphinho run --resume <run-id>           # Resume a previous run
-ralphinho monitor                         # Attach TUI to running workflow
-ralphinho status                          # Show current state
+agentix init scheduled-work ./rfc.md       # Initialize intent-driven workflow
+agentix init scheduled-work ./rfc.md    # Initialize RFC-driven workflow
+agentix plan                            # (Re)generate work plan (scheduled-work only)
+agentix run                             # Execute the initialized workflow
+agentix run --resume <run-id>           # Resume a previous run
+agentix monitor                         # Attach TUI to running workflow
+agentix status                          # Show current state
 ```
 
 ### Shared Utilities (`src/cli/shared.ts`)
@@ -401,8 +401,8 @@ Example: `sr-m3abc12-deadbeef`
 
 ### Project Directory
 
-Both workflows store state in `.ralphinho/`:
-- `.ralphinho/config.json` — Mode, repoRoot, agents, settings
-- `.ralphinho/work-plan.json` — Work plan (ScheduledWork only)
-- `.ralphinho/generated/workflow.tsx` — Generated Smithers workflow
-- `.ralphinho/workflow.db` — Smithers SQLite database
+Both workflows store state in `.agentix/`:
+- `.agentix/config.json` — Mode, repoRoot, agents, settings
+- `.agentix/work-plan.json` — Work plan (ScheduledWork only)
+- `.agentix/generated/workflow.tsx` — Generated Smithers workflow
+- `.agentix/workflow.db` — Smithers SQLite database

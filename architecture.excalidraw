@@ -1,7 +1,7 @@
 {
   "type": "excalidraw",
   "version": 2,
-  "source": "super-ralph",
+  "source": "agentix",
   "elements": [
     {
       "type": "text",
@@ -10,7 +10,7 @@
       "y": 20,
       "width": 600,
       "height": 25,
-      "text": "SuperRalph v0.3.0 — AI-Driven Agent Scheduling",
+      "text": "Agentix v0.3.0 — AI-Driven Agent Scheduling",
       "fontSize": 28,
       "fontFamily": 1,
       "textAlign": "center",
@@ -29,7 +29,7 @@
       "version": 1,
       "versionNonce": 1001,
       "isDeleted": false,
-      "originalText": "SuperRalph v0.3.0 — AI-Driven Agent Scheduling",
+      "originalText": "Agentix v0.3.0 — AI-Driven Agent Scheduling",
       "lineHeight": 1.25
     },
     {

@@ -44,7 +44,10 @@ export function Monitor({
 }: MonitorProps) {
   // On --resume the CLI spawns a standalone monitor process, so skip the
   // in-workflow monitor to avoid two TUI instances fighting for the terminal.
-  if (process.env.SUPER_RALPH_SKIP_MONITOR === "1") {
+  if (
+    process.env.AGENTIX_SKIP_MONITOR === "1" ||
+    process.env.SUPER_RALPH_SKIP_MONITOR === "1"
+  ) {
     return (
       <Task id="monitor" output={monitorOutputSchema} continueOnFail={true}>
         {async () => ({ started: false, status: "skipped-standalone-active" })}

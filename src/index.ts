@@ -39,13 +39,13 @@ export {
   SCHEDULED_TIERS,
   workPlanSchema,
   workUnitSchema,
-  ralphinhoConfigSchema,
+  agentixConfigSchema,
 } from "./scheduled/types";
 
 export type {
   WorkPlan,
   WorkUnit,
-  RalphinhoConfig,
+  AgentixConfig,
   ScheduledTier,
 } from "./scheduled/types";
 

@@ -1,8 +1,8 @@
-# ralphinho
+# agentix
 
 > Plan-driven AI development workflow — decompose specs into work units, implement them in parallel with quality gates, and land them onto main.
 
-An opinionated [Smithers](https://smithers.sh) workflow. You provide a plan, ralphinho decomposes it into work units with a dependency DAG, runs each through a tier-based quality pipeline (research → plan → implement → test → review), and lands the results via a conflict-aware merge queue.
+An opinionated [Smithers](https://smithers.sh) workflow. You provide a plan, agentix decomposes it into work units with a dependency DAG, runs each through a tier-based quality pipeline (research → plan → implement → test → review), and lands the results via a conflict-aware merge queue.
 
 ## Quick Start
 
@@ -10,37 +10,37 @@ From any repo with an RFC file:
 
 ```bash
 # Install (or use bunx to run directly)
-bun add github:enitrat/ralphinho smithers-orchestrator
+bun add github:AbdelStark/agentix smithers-orchestrator
 
 # Initialize — decomposes the RFC into work units
-bunx ralphinho init ./docs/rfc-003.md
+bunx agentix init ./docs/rfc-003.md
 
 # Review the generated plan, edit if needed
-cat .ralphinho/work-plan.json
+cat .agentix/work-plan.json
 
 # Execute the workflow
-bunx ralphinho run
+bunx agentix run
 ```
 
 ### Prerequisites
 
 - [Bun](https://bun.sh) >= 1.3
 - [jj](https://martinvonz.github.io/jj/) (Jujutsu VCS) — `brew install jj`
-  - `ralphinho init` automatically runs `jj git init --colocate` if the repo is not yet colocated
+  - `agentix init` automatically runs `jj git init --colocate` if the repo is not yet colocated
 - At least one agent CLI: [`claude`](https://claude.ai/download) and/or [`codex`](https://openai.com/codex)
 
 ## CLI
 
 ```
-ralphinho — RFC-driven AI development workflow CLI
+agentix — RFC-driven AI development workflow CLI
 
 Usage:
-  ralphinho init ./rfc.md              Decompose RFC into work units
-  ralphinho plan                       (Re)generate work plan from RFC
-  ralphinho run                        Execute the workflow
-  ralphinho run --resume <run-id>      Resume a previous run
-  ralphinho monitor                    Attach TUI to running workflow
-  ralphinho status                     Show current state
+  agentix init ./rfc.md              Decompose RFC into work units
+  agentix plan                       (Re)generate work plan from RFC
+  agentix run                        Execute the workflow
+  agentix run --resume <run-id>      Resume a previous run
+  agentix monitor                    Attach TUI to running workflow
+  agentix status                     Show current state
 
 Options:
   --cwd <path>                Repo root (default: cwd)
@@ -53,8 +53,8 @@ Options:
 
 Reads your RFC, scans the repo for build/test commands, detects available agent CLIs, then uses AI to decompose the RFC into work units with a dependency DAG. Outputs:
 
-- `.ralphinho/config.json` — workflow configuration
-- `.ralphinho/work-plan.json` — work units, dependencies, tiers, acceptance criteria
+- `.agentix/config.json` — workflow configuration
+- `.agentix/work-plan.json` — work units, dependencies, tiers, acceptance criteria
 
 You can edit the work plan before running.
 
@@ -74,7 +74,7 @@ Re-runs the AI decomposition using the RFC from the existing config. Useful afte
 ### `resume`
 
 ```bash
-ralphinho run --resume sw-m3abc12-deadbeef
+agentix run --resume sw-m3abc12-deadbeef
 ```
 
 Picks up from exactly where a previous run stopped — partial implementations, in-progress reviews, everything is persisted in SQLite.
@@ -138,8 +138,8 @@ The components can be used directly in custom Smithers workflows:
 
 ```tsx
 import { createSmithers } from "smithers-orchestrator";
-import { scheduledOutputSchemas } from "ralphinho/scheduled/schemas";
-import { ScheduledWorkflow } from "ralphinho/components";
+import { scheduledOutputSchemas } from "agentix/scheduled/schemas";
+import { ScheduledWorkflow } from "agentix/components";
 
 const { smithers, outputs, Workflow } = createSmithers(
   scheduledOutputSchemas,
@@ -194,8 +194,8 @@ agents={{
 
 ```
 src/
-├── cli/                        # ralphinho CLI
-│   ├── ralphinho.ts            # Entry point
+├── cli/                        # agentix CLI
+│   ├── agentix.ts            # Entry point
 │   ├── init-scheduled.ts       # RFC decomposition + config
 │   ├── plan.ts                 # Re-generate work plan
 │   ├── run.ts                  # Execute workflow

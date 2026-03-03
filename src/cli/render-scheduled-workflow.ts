@@ -7,7 +7,7 @@
 
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { ralphSourceRoot, runningFromSource } from "./shared";
+import { agentixSourceRoot, runningFromSource } from "./shared";
 
 export function renderScheduledWorkflow(params: {
   repoRoot: string;
@@ -23,9 +23,9 @@ export function renderScheduledWorkflow(params: {
   if (isLibRepo) {
     importPrefix = "../../src";
   } else if (runningFromSource) {
-    importPrefix = ralphSourceRoot + "/src";
+    importPrefix = agentixSourceRoot + "/src";
   } else {
-    importPrefix = "super-ralph";
+    importPrefix = "agentix";
   }
 
   return `import React from "react";
@@ -37,14 +37,14 @@ import { ScheduledWorkflow } from "${importPrefix}/components";
 
 // ── Load config ────────────────────────────────────────────────────────
 
-const _ralphDir = join(import.meta.dir, "..");
-const _config = JSON.parse(readFileSync(join(_ralphDir, "config.json"), "utf8"));
+const _agentixDir = join(import.meta.dir, "..");
+const _config = JSON.parse(readFileSync(join(_agentixDir, "config.json"), "utf8"));
 
 // ── Constants ─────────────────────────────────────────────────────────
 
 const REPO_ROOT = _config.repoRoot as string;
-const DB_PATH = join(_ralphDir, "workflow.db");
-const PLAN_PATH = join(_ralphDir, "work-plan.json");
+const DB_PATH = join(_agentixDir, "workflow.db");
+const PLAN_PATH = join(_agentixDir, "work-plan.json");
 const HAS_CLAUDE = _config.agents.claude as boolean;
 const HAS_CODEX = _config.agents.codex as boolean;
 const MAX_CONCURRENCY = _config.maxConcurrency as number;

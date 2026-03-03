@@ -1,4 +1,4 @@
-# Ralphinho
+# Agentix
 
 An RFC-driven, multi-agent development pipeline. Takes an RFC document, decomposes it into work units with a dependency DAG, runs each unit through a quality pipeline of specialized AI agents, and lands them onto main via a merge queue.
 
@@ -16,7 +16,7 @@ For infrastructure details (Smithers engine, jj VCS, agent system), see [CONCEPT
                    └──────┬──────┘
                           │
            ┌──────────────▼──────────────┐
-           │  ralphinho init scheduled   │
+           │  agentix init scheduled   │
            │                             │
            │  1. Scan repo (build/test   │
            │     commands, pkg manager)  │
@@ -39,7 +39,7 @@ For infrastructure details (Smithers engine, jj VCS, agent system), see [CONCEPT
                     and edits
                           │
                 ┌─────────▼─────────┐
-                │  ralphinho run    │
+                │  agentix run    │
                 │                   │
                 │  Generates a      │
                 │  Smithers .tsx    │
@@ -211,7 +211,7 @@ Feedback loops:
 
 ### A. Pre-Workflow: RFC Decomposition
 
-**What happens**: `ralphinho init scheduled-work ./rfc.md` scans the repo, detects available agents, and sends the RFC to an AI (Claude Sonnet) that decomposes it into work units with a dependency DAG. The output is `.ralphinho/work-plan.json`.
+**What happens**: `agentix init scheduled-work ./rfc.md` scans the repo, detects available agents, and sends the RFC to an AI (Claude Sonnet) that decomposes it into work units with a dependency DAG. The output is `.agentix/work-plan.json`.
 
 **Why an upfront decomposition**: The alternative — discovering work at runtime — makes the pipeline unpredictable. Upfront decomposition gives the human a concrete plan to review and edit before any agent touches code. It also makes execution deterministic: the DAG locks in parallelism and ordering, so reruns are reproducible.
 

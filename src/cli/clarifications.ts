@@ -1,5 +1,5 @@
 /**
- * Super Ralph Workflow Clarification Questions
+ * Agentix Workflow Clarification Questions
  *
  * This module provides a structured questionnaire for gathering workflow preferences.
  * Can be used by both the CLI and AI agents to customize workflow behavior.
@@ -26,7 +26,7 @@ export type ClarificationQuestion = {
 };
 
 /**
- * Generate the standard set of clarifying questions for Super Ralph workflows.
+ * Generate the standard set of clarifying questions for Agentix workflows.
  * These questions help determine workflow behavior, testing strategy, review process, etc.
  */
 export function getClarificationQuestions(): ClarificationQuestion[] {

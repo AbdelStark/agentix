@@ -364,8 +364,8 @@ export function ScheduledWorkflow({
             failedUnits.length === 0
               ? []
               : [
-                  "Review failed units and their eviction/test context in .ralphinho/workflow.db",
-                  "Consider running 'ralphinho run --resume' to retry failed units",
+                  "Review failed units and their eviction/test context in .agentix/workflow.db",
+                  "Consider running 'agentix run --resume' to retry failed units",
                   ...failedUnits.map(
                     (f) =>
                       `${f.unitId}: last reached ${f.lastStage} — ${f.reason}`,

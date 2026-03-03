@@ -47,9 +47,9 @@ export const workPlanSchema = z.object({
 
 export type WorkPlan = z.infer<typeof workPlanSchema>;
 
-// ── Ralphinho Config ──────────────────────────────────────────────────
+// ── Agentix Config ──────────────────────────────────────────────────
 
-export const ralphinhoConfigSchema = z.object({
+export const agentixConfigSchema = z.object({
   /** Workflow mode */
   mode: z.literal("scheduled-work"),
   /** Absolute path to repo root */
@@ -70,7 +70,7 @@ export const ralphinhoConfigSchema = z.object({
   createdAt: z.string(),
 });
 
-export type RalphinhoConfig = z.infer<typeof ralphinhoConfigSchema>;
+export type AgentixConfig = z.infer<typeof agentixConfigSchema>;
 
 // ── Tier Pipeline Stages ──────────────────────────────────────────────
 
