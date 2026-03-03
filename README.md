@@ -53,6 +53,8 @@ bun install
 # required checks before commit/PR
 bun run typecheck
 bun test
+# deterministic command-level integration harness (also included in `bun test`)
+bun run test:integration
 # or both in one command:
 bun run check
 
@@ -278,6 +280,8 @@ src/
 │   ├── plan.ts                 # Re-generate work plan
 │   ├── run.ts                  # Execute workflow
 │   ├── events.ts               # Structured command event logging
+│   ├── adapters.ts             # Testable CLI boundary contracts
+│   ├── integration/            # Deterministic command integration harness
 │   ├── render-scheduled-workflow.ts  # Generate workflow.tsx (~120 lines)
 │   ├── status.ts               # Show current state
 │   └── monitor-cmd.ts          # Attach TUI

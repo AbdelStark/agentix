@@ -7,6 +7,7 @@
 3. Run quality gates locally:
    - `bun run typecheck`
    - `bun test`
+   - `bun run test:integration` (deterministic CLI command harness; also included in `bun test`)
    - `bun run release:check` (required for release/tag prep)
 4. Update docs when behavior/contracts change.
 5. Submit a scoped commit with clear intent.

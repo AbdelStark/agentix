@@ -11,6 +11,8 @@ The format is based on Keep a Changelog and uses semantic versioning.
 - Parser contract tests for scheduled RFC decomposition response handling.
 - CLI utility contract tests and release consistency checks.
 - Release process documentation and checklist automation.
+- Deterministic CLI integration harness for `init`, `plan`, `run`, `run --resume`, `status`, and `monitor` with mocked external boundaries.
+- CLI adapter seams (`DecomposeAdapter`, `LaunchAdapter`, `PromptAdapter`, `AgentDetectionAdapter`) to support command-level integration testing without runtime behavior changes.
 
 ## [0.3.1] - 2026-03-03
 
