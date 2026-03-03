@@ -19,6 +19,10 @@ Use this process for every tagged release.
    - Use heading format: `## [x.y.z] - YYYY-MM-DD`.
 5. Verify release consistency:
    - `bun run release:check`
+6. Run telemetry analytics review:
+   - `bun run cli -- analytics summary --window 7d --write-report`
+   - `bun run cli -- analytics failures --window 7d --top 10`
+   - Review `docs/ops/quality-report.md` and assign owner/actions for top recurring failures.
 
 ## 2. Version and Tag
 
@@ -41,4 +45,7 @@ If any gate fails, publish is blocked.
 
 1. Confirm package on npm.
 2. Confirm GitHub release was created from tag.
-3. Add follow-up items back into `[Unreleased]` in `CHANGELOG.md`.
+3. Archive telemetry artifacts for the release:
+   - `.agentix/analytics/daily-YYYY-MM-DD.json`
+   - `docs/ops/quality-report.md`
+4. Add follow-up items back into `[Unreleased]` in `CHANGELOG.md`.

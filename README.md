@@ -74,6 +74,8 @@ Usage:
   agentix run --resume <run-id>      Resume a previous run
   agentix monitor                    Attach TUI to running workflow
   agentix status                     Show current state
+  agentix analytics summary          Telemetry summary + snapshots
+  agentix analytics failures         Top failure reasons + taxonomy
 
 Options:
   --cwd <path>                Repo root (default: cwd)
@@ -195,6 +197,16 @@ Agentix writes structured local telemetry events to:
 
 This stream captures command lifecycle transitions (`started`, `completed`, `failed`, `cancelled`) with run IDs and troubleshooting details.
 
+For aggregated telemetry intelligence:
+
+- `agentix analytics summary --window 7d`
+- `agentix analytics failures --window 7d --top 10`
+
+Artifacts generated from telemetry:
+
+- `.agentix/analytics/daily-YYYY-MM-DD.json`
+- `docs/ops/quality-report.md` (via `--write-report`)
+
 ### DAG-Driven Parallelism
 
 Work units declare dependencies. `computeLayers()` produces topological groups:
@@ -306,6 +318,8 @@ src/
 │   ├── plan.ts                 # Re-generate work plan
 │   ├── run.ts                  # Execute workflow
 │   ├── events.ts               # Structured command event logging
+│   ├── analytics.ts            # Telemetry aggregation + report synthesis
+│   ├── analytics-cmd.ts        # `agentix analytics` CLI command
 │   ├── adapters.ts             # Testable CLI boundary contracts
 │   ├── integration/            # Deterministic command integration harness
 │   ├── render-scheduled-workflow.ts  # Generate workflow.tsx (~120 lines)
@@ -339,6 +353,8 @@ docs/
 │   ├── 04-merge-queue-risk-scoring-and-ordering.md
 │   ├── 05-telemetry-aggregation-and-analytics-loop.md
 │   └── README.md
+├── ops/
+│   └── quality-report-template.md
 ├── observability.md
 ├── production-readiness-checklist.md
 └── release-process.md

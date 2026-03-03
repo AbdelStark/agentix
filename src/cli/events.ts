@@ -1,14 +1,25 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 
-export type AgentixCommand = "init" | "plan" | "run" | "status" | "monitor";
+export const AGENTIX_EVENT_SCHEMA_VERSION = 2;
+
+export type AgentixCommand =
+  | "init"
+  | "plan"
+  | "run"
+  | "status"
+  | "monitor"
+  | "analytics";
 
 export type AgentixEvent = {
+  schemaVersion?: number;
   ts: string;
   level: "info" | "error";
   event: string;
   command: AgentixCommand;
   runId?: string;
+  sessionId?: string;
+  unitId?: string;
   details?: Record<string, unknown>;
 };
 
@@ -21,6 +32,7 @@ export async function appendAgentixEvent(
   try {
     await mkdir(agentixDir, { recursive: true });
     const event: AgentixEvent = {
+      schemaVersion: AGENTIX_EVENT_SCHEMA_VERSION,
       ts: new Date().toISOString(),
       ...payload,
     };

@@ -10,11 +10,14 @@ Each line is a JSON object.
 
 ```json
 {
+  "schemaVersion": 2,
   "ts": "2026-03-03T12:00:00.000Z",
   "level": "info",
   "event": "command.started",
   "command": "run",
   "runId": "sw-abc123-89ef0123",
+  "sessionId": "analytics-m7e3c4-a1b2c3d4",
+  "unitId": "unit-42",
   "details": {
     "repoRoot": "/path/to/repo"
   }
@@ -22,12 +25,33 @@ Each line is a JSON object.
 ```
 
 Fields:
+- `schemaVersion`: telemetry schema version (current: `2`, missing implies legacy `1`)
 - `ts`: ISO timestamp
 - `level`: `info` or `error`
 - `event`: lifecycle event (`command.started`, `command.completed`, `command.failed`, `command.cancelled`)
-- `command`: one of `init`, `plan`, `run`, `status`, `monitor`
+- `command`: one of `init`, `plan`, `run`, `status`, `monitor`, `analytics`
 - `runId`: optional workflow run ID
+- `sessionId`: optional command invocation correlation ID
+- `unitId`: optional work-unit correlation ID
 - `details`: additional metadata for troubleshooting
+
+Reason enums should be emitted under `details.reason` when a deterministic reason is known.
+
+## Telemetry Analytics
+
+Agentix now ships local analytics commands over `.agentix/events.jsonl`:
+
+- `agentix analytics summary --window 7d`
+- `agentix analytics summary --window 7d --json --write-report`
+- `agentix analytics failures --window 7d --top 10`
+- `agentix analytics failures --window 7d --top 10 --json`
+
+Generated artifacts:
+- `.agentix/analytics/daily-YYYY-MM-DD.json` (daily rollup snapshot)
+- `docs/ops/quality-report.md` (actionable feedback report when `--write-report` is used)
+
+Failure taxonomy buckets:
+- `config`, `environment`, `schema`, `tests`, `merge`, `policy`, `infra`, `unknown`
 
 ## Merge Queue Risk Taxonomy
 

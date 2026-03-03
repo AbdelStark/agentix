@@ -43,6 +43,7 @@ describe("appendAgentixEvent", () => {
     expect(lines).toHaveLength(2);
 
     const first = JSON.parse(lines[0]) as {
+      schemaVersion?: number;
       ts: string;
       level: string;
       event: string;
@@ -51,6 +52,7 @@ describe("appendAgentixEvent", () => {
     };
     const second = JSON.parse(lines[1]) as typeof first;
 
+    expect(first.schemaVersion).toBe(2);
     expect(first.ts.length).toBeGreaterThan(0);
     expect(first.level).toBe("info");
     expect(first.event).toBe("command.started");

@@ -31,6 +31,10 @@ Use this checklist before tagging a release.
 - [ ] `.agentix/` runtime artifacts are excluded from git
 - [ ] `.smithers/executions/` logs are excluded from git
 - [ ] `.agentix/events.jsonl` telemetry is present and readable locally
+- [ ] `agentix analytics summary --window 7d` runs successfully
+- [ ] `.agentix/analytics/daily-YYYY-MM-DD.json` snapshot is generated for current review cycle
+- [ ] `agentix analytics failures --window 7d --top 10` has been reviewed
+- [ ] `docs/ops/quality-report.md` is generated and assigned follow-up owners for recurring failures
 - [ ] No secrets or credentials are committed
 - [ ] Security/performance review evidence is retained in workflow outputs
 

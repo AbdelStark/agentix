@@ -9,6 +9,7 @@
    - `bun test`
    - `bun run test:integration` (deterministic CLI command harness; also included in `bun test`)
    - `bun run release:check` (required for release/tag prep)
+   - `bun run ops:quality-report` (recommended before release/tag prep)
 4. Update docs when behavior/contracts change.
 5. Submit a scoped commit with clear intent.
 
@@ -22,6 +23,7 @@ Changes should be merge-ready only if all are true:
 - No uncovered executable scenarios for affected units.
 - Docs/context files are updated when operational behavior changes.
 - `.agentix/events.jsonl` remains local runtime telemetry (never committed).
+- Weekly telemetry rollup/report commands remain operational (`analytics:summary`, `analytics:failures`, `ops:quality-report`).
 
 ## Design Rules
 

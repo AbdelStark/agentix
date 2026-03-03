@@ -9,6 +9,8 @@
  *   agentix run --resume <run-id>    Resume a previous run
  *   agentix monitor                  Attach TUI to running workflow
  *   agentix status                   Show current state
+ *   agentix analytics summary         Telemetry summary + snapshots
+ *   agentix analytics failures        Failure taxonomy/top reasons
  */
 
 import { resolve } from "node:path";
@@ -25,6 +27,8 @@ Usage:
   agentix run --resume <run-id>            Resume a previous run
   agentix monitor                          Attach TUI to running workflow
   agentix status                           Show current state
+  agentix analytics summary --window 7d    Telemetry summary + snapshot
+  agentix analytics failures --top 10      Top failure reasons
 
 Global Options:
   --cwd <path>                Repo root (default: current directory)
@@ -39,6 +43,7 @@ Examples:
   agentix plan
   agentix run
   agentix run --resume sw-m3abc12-deadbeef
+  agentix analytics summary --window 7d --json
 `);
 }
 
@@ -86,6 +91,15 @@ async function main() {
     case "status": {
       const { runStatus } = await import("./status");
       return runStatus({ repoRoot });
+    }
+
+    case "analytics": {
+      const { runAnalyticsCommand } = await import("./analytics-cmd");
+      return runAnalyticsCommand({
+        positional: parsed.positional.slice(1),
+        flags: parsed.flags,
+        repoRoot,
+      });
     }
 
     default: {
