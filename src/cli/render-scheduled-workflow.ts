@@ -11,14 +11,8 @@ import { ralphSourceRoot, runningFromSource } from "./shared";
 
 export function renderScheduledWorkflow(params: {
   repoRoot: string;
-  dbPath: string;
-  planPath: string;
-  detectedAgents: { claude: boolean; codex: boolean; gh: boolean };
-  maxConcurrency: number;
-  baseBranch: string;
 }): string {
-  const { repoRoot, dbPath, planPath, detectedAgents, maxConcurrency, baseBranch } =
-    params;
+  const { repoRoot } = params;
 
   // Determine import prefix — where to import library components from
   const isLibRepo =
@@ -36,20 +30,26 @@ export function renderScheduledWorkflow(params: {
 
   return `import React from "react";
 import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { createSmithers, ClaudeCodeAgent, CodexAgent } from "smithers-orchestrator";
 import { scheduledOutputSchemas } from "${importPrefix}/scheduled/schemas";
 import { ScheduledWorkflow } from "${importPrefix}/components";
 
+// ── Load config ────────────────────────────────────────────────────────
+
+const _ralphDir = join(import.meta.dir, "..");
+const _config = JSON.parse(readFileSync(join(_ralphDir, "config.json"), "utf8"));
+
 // ── Constants ─────────────────────────────────────────────────────────
 
-const REPO_ROOT = ${JSON.stringify(repoRoot)};
-const DB_PATH = ${JSON.stringify(dbPath)};
-const PLAN_PATH = ${JSON.stringify(planPath)};
-const HAS_CLAUDE = ${detectedAgents.claude};
-const HAS_CODEX = ${detectedAgents.codex};
-const MAX_CONCURRENCY = ${maxConcurrency};
+const REPO_ROOT = _config.repoRoot as string;
+const DB_PATH = join(_ralphDir, "workflow.db");
+const PLAN_PATH = join(_ralphDir, "work-plan.json");
+const HAS_CLAUDE = _config.agents.claude as boolean;
+const HAS_CODEX = _config.agents.codex as boolean;
+const MAX_CONCURRENCY = _config.maxConcurrency as number;
 const MAX_PASSES = 9;
-const BASE_BRANCH = ${JSON.stringify(baseBranch)};
+const BASE_BRANCH = _config.baseBranch as string;
 
 // ── Load work plan ────────────────────────────────────────────────────
 
