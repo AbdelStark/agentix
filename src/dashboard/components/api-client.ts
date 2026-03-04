@@ -49,6 +49,18 @@ export const dashboardApi = {
     readJson<ApiListResponse<any>>(
       `/api/runs/${encodeURIComponent(runId)}/attempts?limit=2000&offset=0`,
     ),
+  listPrompts: (runId: string) =>
+    readJson<ApiListResponse<any>>(
+      `/api/runs/${encodeURIComponent(runId)}/prompts?limit=2000&offset=0`,
+    ),
+  listExecutionSteps: (runId: string) =>
+    readJson<ApiListResponse<any>>(
+      `/api/runs/${encodeURIComponent(runId)}/execution-steps?limit=5000&offset=0`,
+    ),
+  listTimeline: (runId: string) =>
+    readJson<ApiListResponse<any>>(
+      `/api/runs/${encodeURIComponent(runId)}/timeline?limit=5000&offset=0`,
+    ),
   listEvents: (runId: string) =>
     readJson<ApiListResponse<any>>(
       `/api/runs/${encodeURIComponent(runId)}/events?limit=2000&offset=0`,

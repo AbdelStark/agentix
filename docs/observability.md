@@ -123,3 +123,34 @@ Feature flags for deeper dashboard telemetry:
 - `AGENTIX_OBS_CLAUDE_TELEMETRY=1` (Claude stream-json capture)
 - `AGENTIX_OBS_RESOURCE_SAMPLER=1` (CPU/RSS sampling to `.agentix/resource-samples.jsonl`)
 - `AGENTIX_OBS_RESOURCE_SAMPLE_MS=2000` (sampling interval in ms)
+
+## Telemetry Cockpit Projections
+
+The dashboard telemetry module now exposes three run-scoped forensic projections:
+
+- Prompt audit:
+  - `GET /api/runs/:runId/prompts`
+  - Returns normalized prompt/response metadata per attempt:
+    - `nodeId`, `unitId`, `stage`, `iteration`, `attempt`
+    - `promptText`, `promptPreview`, `promptHash`
+    - `responseChars`, `responsePreview`
+    - timing fields (`startedAt`, `finishedAt`, `durationMs`, `timestamp`)
+
+- Execution steps:
+  - `GET /api/runs/:runId/execution-steps`
+  - Returns exact attempt-level step telemetry:
+    - `unitId`, `stage`, `nodeId`, `iteration`, `attempt`, `state`
+    - `durationMs`, `cached`, `errorMessage`
+    - `promptAvailable`, `promptPreview`, `promptHash`
+
+- Unified timeline:
+  - `GET /api/runs/:runId/timeline`
+  - Merges all local run telemetry into one correlated stream:
+    - Smithers node events (`source=smithers`, `category=node`)
+    - Agentix command events (`source=agentix`, `category=command`)
+    - Tool telemetry (`source=telemetry`, `category=tool`)
+    - Resource samples (`source=resource`, `category=resource`)
+  - Supports filters:
+    - `source`, `category`, `query`, `fromTs`, `toTs`, pagination (`limit`, `offset`)
+
+All API responses continue to run through secret redaction middleware.

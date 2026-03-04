@@ -10,6 +10,7 @@ import { renderGateBoard } from "./modules/gates/render.ts";
 import { renderRiskPanel } from "./modules/risk/render.ts";
 import { renderTracePanel } from "./modules/trace/render.ts";
 import { renderAnalyticsPanel } from "./modules/analytics/render.ts";
+import { renderTelemetryCockpit } from "./modules/telemetry/render.ts";
 
 type ModuleId = "cockpit" | "dag" | "attempts" | "readiness" | "analytics" | "telemetry";
 
@@ -174,6 +175,9 @@ type AppState = {
   logScrollTopPx: number;
   toolEvents: any[];
   resources: any[];
+  prompts: any[];
+  executionSteps: any[];
+  timeline: any[];
 };
 
 const state: AppState = {
@@ -210,6 +214,9 @@ const state: AppState = {
   logScrollTopPx: 0,
   toolEvents: [],
   resources: [],
+  prompts: [],
+  executionSteps: [],
+  timeline: [],
 };
 
 let eventSource: EventSource | null = null;
@@ -385,11 +392,14 @@ function setAttemptFocus(nodeId: string | null, attempt: number | null) {
 }
 
 async function refreshRunScopedData(runId: string) {
-  const [runSummary, nodes, attempts, events, logs, stageOutputs, mergeRisk, toolEvents, resources] =
+  const [runSummary, nodes, attempts, prompts, executionSteps, timeline, events, logs, stageOutputs, mergeRisk, toolEvents, resources] =
     await Promise.all([
       dashboardApi.getRun(runId),
       dashboardApi.listNodes(runId),
       dashboardApi.listAttempts(runId),
+      dashboardApi.listPrompts(runId),
+      dashboardApi.listExecutionSteps(runId),
+      dashboardApi.listTimeline(runId),
       dashboardApi.listEvents(runId),
       dashboardApi.listLogs(runId),
       dashboardApi.listStageOutputs(runId),
@@ -401,13 +411,28 @@ async function refreshRunScopedData(runId: string) {
   state.runSummary = runSummary;
   state.nodes = nodes.items ?? [];
   state.attempts = attempts.items ?? [];
+  state.prompts = prompts.items ?? [];
+  state.executionSteps = executionSteps.items ?? [];
+  state.timeline = timeline.items ?? [];
   state.events = events.items ?? [];
   state.logs = logs.items ?? [];
   state.stageOutputs = stageOutputs.items ?? [];
   state.mergeRisk = mergeRisk.items ?? [];
   state.toolEvents = toolEvents.items ?? [];
   state.resources = resources.items ?? [];
-  state.warnings = collectWarnings(nodes, attempts, events, logs, stageOutputs, mergeRisk, toolEvents, resources);
+  state.warnings = collectWarnings(
+    nodes,
+    attempts,
+    prompts,
+    executionSteps,
+    timeline,
+    events,
+    logs,
+    stageOutputs,
+    mergeRisk,
+    toolEvents,
+    resources,
+  );
 }
 
 function connectLiveStream() {
@@ -465,7 +490,11 @@ function connectLiveStream() {
         scheduleRunRefresh();
       }
 
-      if (state.selectedModule === "attempts" || state.selectedModule === "cockpit") {
+      if (
+        state.selectedModule === "attempts" ||
+        state.selectedModule === "cockpit" ||
+        state.selectedModule === "telemetry"
+      ) {
         renderModuleOnly();
       }
       renderHeaderOnly();
@@ -625,61 +654,14 @@ function renderModuleContent(): string {
 }
 
 function renderTelemetryPanel(): string {
-  const toolRows = state.toolEvents
-    .slice(0, 80)
-    .map(
-      (event) => `
-        <tr>
-          <td>${escapeHtml(String(event.provider ?? "-"))}</td>
-          <td>${escapeHtml(String(event.eventType ?? "-"))}</td>
-          <td>${escapeHtml(String(event.toolName ?? "-"))}</td>
-          <td>${event.tokenUsage?.total ?? "-"}</td>
-          <td>${formatDate(event.timestamp)}</td>
-        </tr>
-      `,
-    )
-    .join("");
-
-  const resourceRows = state.resources
-    .slice(0, 80)
-    .map(
-      (sample) => `
-        <tr>
-          <td>${formatDate(sample.timestamp)}</td>
-          <td>${escapeHtml(String(sample.nodeId ?? "-"))}</td>
-          <td>${sample.cpuPercent ?? "-"}</td>
-          <td>${sample.memoryRssMb ?? "-"}</td>
-        </tr>
-      `,
-    )
-    .join("");
-
-  return `
-    <section class="panel-grid panel-grid-duo">
-      <article class="glass-card">
-        <h3>Agent Tool Events</h3>
-        <div class="table-wrap">
-          <table class="lucid-table">
-            <thead>
-              <tr><th>Provider</th><th>Event</th><th>Tool</th><th>Tokens</th><th>Time</th></tr>
-            </thead>
-            <tbody>${toolRows || "<tr><td colspan='5'>No telemetry events yet.</td></tr>"}</tbody>
-          </table>
-        </div>
-      </article>
-      <article class="glass-card">
-        <h3>Resource Samples</h3>
-        <div class="table-wrap">
-          <table class="lucid-table">
-            <thead>
-              <tr><th>Time</th><th>Node</th><th>CPU%</th><th>RSS MB</th></tr>
-            </thead>
-            <tbody>${resourceRows || "<tr><td colspan='4'>No samples yet.</td></tr>"}</tbody>
-          </table>
-        </div>
-      </article>
-    </section>
-  `;
+  return renderTelemetryCockpit({
+    toolEvents: state.toolEvents,
+    resources: state.resources,
+    prompts: state.prompts,
+    executionSteps: state.executionSteps,
+    timeline: state.timeline,
+    liveEvents: state.liveEvents,
+  });
 }
 
 function renderPalette(): string {

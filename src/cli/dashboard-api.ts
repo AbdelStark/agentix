@@ -376,8 +376,40 @@ export async function startDashboardApiServer(
         if (resource === "attempts") {
           return jsonResponse(readModel.listAttempts(runId, pagination));
         }
+        if (resource === "prompts") {
+          return jsonResponse(await readModel.listPromptAudits(runId, pagination));
+        }
+        if (resource === "execution-steps") {
+          return jsonResponse(await readModel.listExecutionSteps(runId, pagination));
+        }
         if (resource === "stage-outputs") {
           return jsonResponse(readModel.listStageOutputs(runId, pagination));
+        }
+        if (resource === "timeline") {
+          const source = url.searchParams.get("source");
+          const category = url.searchParams.get("category");
+          return jsonResponse(
+            await readModel.listTimelineEvents(runId, {
+              ...pagination,
+              source:
+                source === "smithers" ||
+                source === "agentix" ||
+                source === "telemetry" ||
+                source === "resource"
+                  ? source
+                  : undefined,
+              category:
+                category === "node" ||
+                category === "command" ||
+                category === "tool" ||
+                category === "resource"
+                  ? category
+                  : undefined,
+              query: url.searchParams.get("query") ?? undefined,
+              fromTs: parseOptionalNumber(url.searchParams.get("fromTs")),
+              toTs: parseOptionalNumber(url.searchParams.get("toTs")),
+            }),
+          );
         }
         if (resource === "events") {
           return jsonResponse(

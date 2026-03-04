@@ -54,6 +54,15 @@ async function createWorkflowDb(repoRoot: string): Promise<string> {
       meta_json TEXT,
       PRIMARY KEY (run_id, node_id, iteration, attempt)
     );
+
+    CREATE TABLE _smithers_events (
+      run_id TEXT NOT NULL,
+      seq INTEGER NOT NULL,
+      timestamp_ms INTEGER NOT NULL,
+      type TEXT NOT NULL,
+      payload_json TEXT NOT NULL,
+      PRIMARY KEY (run_id, seq)
+    );
   `);
 
   db.close();
@@ -243,5 +252,235 @@ describe("dashboard read model", () => {
     expect(toolEvents.items).toHaveLength(1);
     expect(toolEvents.items[0]?.provider).toBe("codex");
     expect(toolEvents.items[0]?.toolName).toBe("functions.exec_command");
+  });
+
+  test("listPromptAudits extracts prompt data from multiple metadata shapes", async () => {
+    const repoRoot = await createTempRepo();
+    const dbPath = await createWorkflowDb(repoRoot);
+    const db = new Database(dbPath);
+
+    db.prepare(
+      `INSERT INTO _smithers_runs (run_id, workflow_name, workflow_path, status, created_at_ms, started_at_ms, finished_at_ms, error_json, config_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "sw-prompts",
+      "scheduled-work",
+      ".agentix/generated/workflow.tsx",
+      "running",
+      1_910_000_000_000,
+      1_910_000_000_010,
+      null,
+      null,
+      "{}",
+    );
+
+    db.prepare(
+      `INSERT INTO _smithers_attempts (run_id, node_id, iteration, attempt, state, started_at_ms, finished_at_ms, error_json, jj_pointer, response_text, jj_cwd, cached, meta_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "sw-prompts",
+      "obs11:implement",
+      0,
+      1,
+      "finished",
+      1_910_000_010_000,
+      1_910_000_011_000,
+      null,
+      "@-",
+      "Done.",
+      "/tmp/wt",
+      0,
+      JSON.stringify({ prompt: "Implement feature X safely." }),
+    );
+
+    db.prepare(
+      `INSERT INTO _smithers_attempts (run_id, node_id, iteration, attempt, state, started_at_ms, finished_at_ms, error_json, jj_pointer, response_text, jj_cwd, cached, meta_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "sw-prompts",
+      "obs11:test",
+      0,
+      2,
+      "failed",
+      1_910_000_012_000,
+      1_910_000_013_000,
+      JSON.stringify({ message: "tests failed" }),
+      "@-",
+      "Need fix.",
+      "/tmp/wt",
+      0,
+      JSON.stringify({
+        messages: [
+          { role: "system", content: "rules" },
+          { role: "user", content: "Run full suite and map scenarios." },
+        ],
+      }),
+    );
+
+    db.close();
+
+    const model = createDashboardReadModel({ repoRoot });
+    const prompts = await model.listPromptAudits("sw-prompts", {
+      limit: 10,
+      offset: 0,
+    });
+
+    expect(prompts.items).toHaveLength(2);
+    expect(prompts.items[0]?.promptText.length).toBeGreaterThan(0);
+    expect(prompts.items[0]?.promptHash).not.toBeNull();
+    expect(prompts.items[0]?.nodeId).toBe("obs11:test");
+    expect(prompts.items[1]?.nodeId).toBe("obs11:implement");
+    expect(prompts.items[1]?.responseChars).toBe(5);
+  });
+
+  test("listExecutionSteps normalizes unit and stage correlation fields", async () => {
+    const repoRoot = await createTempRepo();
+    const dbPath = await createWorkflowDb(repoRoot);
+    const db = new Database(dbPath);
+
+    db.prepare(
+      `INSERT INTO _smithers_runs (run_id, workflow_name, workflow_path, status, created_at_ms, started_at_ms, finished_at_ms, error_json, config_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "sw-steps",
+      "scheduled-work",
+      ".agentix/generated/workflow.tsx",
+      "running",
+      1_920_000_000_000,
+      1_920_000_000_010,
+      null,
+      null,
+      "{}",
+    );
+
+    db.prepare(
+      `INSERT INTO _smithers_attempts (run_id, node_id, iteration, attempt, state, started_at_ms, finished_at_ms, error_json, jj_pointer, response_text, jj_cwd, cached, meta_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "sw-steps",
+      "obs12:plan",
+      1,
+      3,
+      "finished",
+      1_920_000_010_000,
+      1_920_000_012_500,
+      null,
+      "@-",
+      "Plan complete",
+      "/tmp/wt",
+      1,
+      JSON.stringify({ input: { prompt: "Design implementation plan." } }),
+    );
+
+    db.close();
+
+    const model = createDashboardReadModel({ repoRoot });
+    const steps = await model.listExecutionSteps("sw-steps", {
+      limit: 10,
+      offset: 0,
+    });
+
+    expect(steps.items).toHaveLength(1);
+    expect(steps.items[0]).toMatchObject({
+      runId: "sw-steps",
+      nodeId: "obs12:plan",
+      unitId: "obs12",
+      stage: "plan",
+      iteration: 1,
+      attempt: 3,
+      durationMs: 2500,
+      promptAvailable: true,
+      cached: true,
+    });
+  });
+
+  test("listTimelineEvents merges smithers, command, telemetry, and resource sources in deterministic order", async () => {
+    const repoRoot = await createTempRepo();
+    const dbPath = await createWorkflowDb(repoRoot);
+    const db = new Database(dbPath);
+
+    db.prepare(
+      `INSERT INTO _smithers_runs (run_id, workflow_name, workflow_path, status, created_at_ms, started_at_ms, finished_at_ms, error_json, config_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "sw-timeline",
+      "scheduled-work",
+      ".agentix/generated/workflow.tsx",
+      "running",
+      1_930_000_000_000,
+      1_930_000_000_100,
+      null,
+      null,
+      "{}",
+    );
+
+    db.prepare(
+      `INSERT INTO _smithers_events (run_id, seq, timestamp_ms, type, payload_json)
+       VALUES (?, ?, ?, ?, ?)`,
+    ).run(
+      "sw-timeline",
+      1,
+      1_930_000_000_500,
+      "NodeStarted",
+      JSON.stringify({ nodeId: "obs12:implement", iteration: 0, attempt: 1 }),
+    );
+    db.close();
+
+    await writeFile(
+      join(repoRoot, ".agentix", "events.jsonl"),
+      JSON.stringify({
+        schemaVersion: 2,
+        ts: new Date(1_930_000_001_000).toISOString(),
+        level: "info",
+        event: "command.started",
+        command: "run",
+        runId: "sw-timeline",
+        details: { repoRoot },
+      }) + "\n",
+      "utf8",
+    );
+
+    const telemetryDir = join(repoRoot, ".agentix", "telemetry");
+    await mkdir(telemetryDir, { recursive: true });
+    await writeFile(
+      join(telemetryDir, "codex-runtime.jsonl"),
+      JSON.stringify({
+        provider: "codex",
+        type: "tool_call",
+        id: "evt-101",
+        tool_name: "functions.exec_command",
+        timestampMs: 1_930_000_001_500,
+      }) + "\n",
+      "utf8",
+    );
+
+    await writeFile(
+      join(repoRoot, ".agentix", "resource-samples.jsonl"),
+      JSON.stringify({
+        runId: "sw-timeline",
+        nodeId: "obs12:implement",
+        timestampMs: 1_930_000_002_000,
+        timestamp: new Date(1_930_000_002_000).toISOString(),
+        cpuPercent: 22.5,
+        memoryRssMb: 180,
+      }) + "\n",
+      "utf8",
+    );
+
+    const model = createDashboardReadModel({ repoRoot });
+    const timeline = await model.listTimelineEvents("sw-timeline", {
+      limit: 10,
+      offset: 0,
+    });
+
+    expect(timeline.items.map((entry) => entry.source)).toEqual([
+      "resource",
+      "telemetry",
+      "agentix",
+      "smithers",
+    ]);
+    expect(timeline.items[0]?.category).toBe("resource");
+    expect(timeline.items[1]?.eventType).toBe("tool_call");
+    expect(timeline.items[3]?.eventType).toBe("NodeStarted");
   });
 });

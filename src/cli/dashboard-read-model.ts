@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import { join, parse } from "node:path";
+import { createHash } from "node:crypto";
 import { Database } from "bun:sqlite";
 
 import type {
@@ -8,6 +9,7 @@ import type {
   DashboardAnalyticsSnapshot,
   DashboardAttemptSnapshot,
   DashboardCommandEventSnapshot,
+  DashboardExecutionStepSnapshot,
   DashboardListResponse,
   DashboardMergeRiskSnapshot,
   DashboardNodeEventSnapshot,
@@ -18,9 +20,13 @@ import type {
   DashboardResourceSample,
   DashboardRunSnapshot,
   DashboardStageOutputSnapshot,
+  DashboardTimelineCategory,
+  DashboardTimelineEvent,
+  DashboardTimelineSource,
   DashboardTraceArtifact,
   DashboardWorkPlan,
   DashboardWorkUnit,
+  DashboardPromptAuditSnapshot,
 } from "./dashboard-types";
 import {
   parseClaudeTelemetryJsonLine,
@@ -74,6 +80,14 @@ type CommandFilterOpts = DashboardPagination & {
   toTs?: number;
 };
 
+type TimelineFilterOpts = DashboardPagination & {
+  source?: DashboardTimelineSource;
+  category?: DashboardTimelineCategory;
+  query?: string;
+  fromTs?: number;
+  toTs?: number;
+};
+
 function toIso(timestampMs: number | null | undefined): string | null {
   if (!Number.isFinite(timestampMs)) return null;
   return new Date(Number(timestampMs)).toISOString();
@@ -96,6 +110,110 @@ function toPagination(opts?: Partial<DashboardPagination>): DashboardPagination 
     : 50;
   const offset = Number.isFinite(rawOffset) ? Math.max(0, Math.floor(rawOffset)) : 0;
   return { limit, offset };
+}
+
+function safeTimestampFromIso(value: string | null | undefined): number {
+  if (!value) return 0;
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function truncateText(value: string, limit: number): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= limit) return trimmed;
+  return `${trimmed.slice(0, Math.max(0, limit - 1))}…`;
+}
+
+function toUnitStage(nodeId: string): {
+  unitId: string | null;
+  stage: string | null;
+} {
+  const normalized = String(nodeId ?? "").trim();
+  if (!normalized.includes(":")) {
+    return {
+      unitId: normalized.length > 0 ? normalized : null,
+      stage: null,
+    };
+  }
+
+  const index = normalized.indexOf(":");
+  const unitId = normalized.slice(0, index).trim();
+  const stage = normalized.slice(index + 1).trim();
+  return {
+    unitId: unitId.length > 0 ? unitId : null,
+    stage: stage.length > 0 ? stage : null,
+  };
+}
+
+function extractPromptFromAttemptMeta(meta: Record<string, unknown> | null): string {
+  if (!meta || typeof meta !== "object") return "";
+
+  const directPrompt = meta.prompt;
+  if (typeof directPrompt === "string" && directPrompt.trim()) {
+    return directPrompt.trim();
+  }
+
+  const input = meta.input;
+  if (input && typeof input === "object") {
+    const prompt = (input as Record<string, unknown>).prompt;
+    if (typeof prompt === "string" && prompt.trim()) {
+      return prompt.trim();
+    }
+  }
+
+  const messages = meta.messages;
+  if (Array.isArray(messages)) {
+    const latestUser = [...messages]
+      .reverse()
+      .find((entry) => {
+        if (!entry || typeof entry !== "object") return false;
+        const record = entry as Record<string, unknown>;
+        return record.role === "user" || record.type === "user";
+      }) as Record<string, unknown> | undefined;
+    const content = latestUser?.content;
+    if (typeof content === "string" && content.trim()) {
+      return content.trim();
+    }
+  }
+
+  return "";
+}
+
+function hashPrompt(value: string): string | null {
+  const normalized = value.trim();
+  if (!normalized) return null;
+  return createHash("sha256").update(normalized).digest("hex").slice(0, 16);
+}
+
+function toErrorMessage(error: unknown): string | null {
+  if (!error) return null;
+  if (typeof error === "string") {
+    const value = error.trim();
+    return value.length > 0 ? value : null;
+  }
+  if (typeof error === "object") {
+    const record = error as Record<string, unknown>;
+    if (typeof record.message === "string" && record.message.trim()) {
+      return record.message.trim();
+    }
+    try {
+      const text = JSON.stringify(record);
+      return text.length > 0 ? text : null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+function compareTimestampDesc(
+  left: { timestampMs: number; eventKey: string },
+  right: { timestampMs: number; eventKey: string },
+): number {
+  if (left.timestampMs !== right.timestampMs) {
+    return right.timestampMs - left.timestampMs;
+  }
+  return right.eventKey.localeCompare(left.eventKey);
 }
 
 function parseMaybeJson(
@@ -193,6 +311,39 @@ function normalizeClaudeEvent(event: NormalizedClaudeTelemetryEvent): DashboardA
     tokenUsage: event.tokenUsage,
     payload: event.payload,
   };
+}
+
+function buildSmithersSummary(event: DashboardNodeEventSnapshot): string {
+  const payload = event.payload ?? {};
+  const nodeId = typeof payload.nodeId === "string" ? payload.nodeId : null;
+  if (event.type === "NodeOutput") {
+    const text = typeof payload.text === "string" ? payload.text : "";
+    const stream = payload.stream === "stderr" ? "stderr" : "stdout";
+    return `${stream} ${nodeId ?? "node"} • ${truncateText(text, 96)}`;
+  }
+  if (nodeId) {
+    return `${event.type} • ${nodeId}`;
+  }
+  return event.type;
+}
+
+function buildCommandSummary(event: DashboardCommandEventSnapshot): string {
+  const reason =
+    typeof event.details.reason === "string" ? ` • ${event.details.reason}` : "";
+  return `${event.command} ${event.event}${reason}`;
+}
+
+function buildToolSummary(event: DashboardAgentToolEvent): string {
+  const tool = event.toolName ? ` • ${event.toolName}` : "";
+  const tokens =
+    typeof event.tokenUsage.total === "number" ? ` • ${event.tokenUsage.total} tokens` : "";
+  return `${event.provider} ${event.eventType}${tool}${tokens}`;
+}
+
+function buildResourceSummary(sample: DashboardResourceSample): string {
+  const cpu = sample.cpuPercent == null ? "-" : `${sample.cpuPercent}%`;
+  const mem = sample.memoryRssMb == null ? "-" : `${sample.memoryRssMb}MB`;
+  return `cpu ${cpu} • rss ${mem}`;
 }
 
 export class DashboardReadModel {
@@ -561,6 +712,292 @@ export class DashboardReadModel {
       },
       buildListResponse([], 0, pagination, warnings),
     );
+  }
+
+  async listPromptAudits(
+    runId: string,
+    inputPagination?: Partial<DashboardPagination>,
+  ): Promise<DashboardListResponse<DashboardPromptAuditSnapshot>> {
+    const pagination = toPagination(inputPagination);
+    const attempts = this.listAttempts(runId, {
+      limit: 10_000,
+      offset: 0,
+    });
+    const warnings = [...attempts.meta.warnings];
+
+    const projected = attempts.items.map((attempt) => {
+      const promptText = extractPromptFromAttemptMeta(attempt.meta);
+      const promptPreview = promptText ? truncateText(promptText, 220) : "";
+      const promptHash = hashPrompt(promptText);
+      const responseText = attempt.responseText ?? "";
+      const responsePreview = responseText ? truncateText(responseText, 220) : "";
+      const timestampMs = Math.max(
+        safeTimestampFromIso(attempt.startedAt),
+        safeTimestampFromIso(attempt.finishedAt),
+      );
+      const timestamp = toIso(timestampMs) ?? new Date(0).toISOString();
+      const unitStage = toUnitStage(attempt.nodeId);
+
+      return {
+        runId: attempt.runId,
+        nodeId: attempt.nodeId,
+        unitId: unitStage.unitId,
+        stage: unitStage.stage,
+        iteration: attempt.iteration,
+        attempt: attempt.attempt,
+        state: attempt.state,
+        startedAt: attempt.startedAt,
+        finishedAt: attempt.finishedAt,
+        durationMs: attempt.durationMs,
+        timestampMs,
+        timestamp,
+        promptText,
+        promptPreview,
+        promptHash,
+        responseChars: responseText.length,
+        responsePreview,
+      } satisfies DashboardPromptAuditSnapshot;
+    });
+
+    projected.sort((a, b) =>
+      compareTimestampDesc(
+        {
+          timestampMs: a.timestampMs,
+          eventKey: `${a.nodeId}:${a.iteration}:${a.attempt}`,
+        },
+        {
+          timestampMs: b.timestampMs,
+          eventKey: `${b.nodeId}:${b.iteration}:${b.attempt}`,
+        },
+      ));
+
+    const total = projected.length;
+    const items = projected.slice(
+      pagination.offset,
+      pagination.offset + pagination.limit,
+    );
+
+    return buildListResponse(items, total, pagination, warnings);
+  }
+
+  async listExecutionSteps(
+    runId: string,
+    inputPagination?: Partial<DashboardPagination>,
+  ): Promise<DashboardListResponse<DashboardExecutionStepSnapshot>> {
+    const pagination = toPagination(inputPagination);
+    const attempts = this.listAttempts(runId, {
+      limit: 10_000,
+      offset: 0,
+    });
+    const warnings = [...attempts.meta.warnings];
+
+    const projected = attempts.items.map((attempt) => {
+      const promptText = extractPromptFromAttemptMeta(attempt.meta);
+      const promptPreview = promptText ? truncateText(promptText, 180) : "";
+      const promptHash = hashPrompt(promptText);
+      const responseChars = (attempt.responseText ?? "").length;
+      const timestampMs = Math.max(
+        safeTimestampFromIso(attempt.startedAt),
+        safeTimestampFromIso(attempt.finishedAt),
+      );
+      const timestamp = toIso(timestampMs) ?? new Date(0).toISOString();
+      const errorMessage = toErrorMessage(attempt.error);
+      const unitStage = toUnitStage(attempt.nodeId);
+
+      return {
+        runId: attempt.runId,
+        nodeId: attempt.nodeId,
+        unitId: unitStage.unitId,
+        stage: unitStage.stage,
+        iteration: attempt.iteration,
+        attempt: attempt.attempt,
+        state: attempt.state,
+        startedAt: attempt.startedAt,
+        finishedAt: attempt.finishedAt,
+        durationMs: attempt.durationMs,
+        timestampMs,
+        timestamp,
+        promptAvailable: promptText.length > 0,
+        promptPreview,
+        promptHash,
+        responseChars,
+        cached: attempt.cached,
+        errorMessage,
+      } satisfies DashboardExecutionStepSnapshot;
+    });
+
+    projected.sort((a, b) =>
+      compareTimestampDesc(
+        {
+          timestampMs: a.timestampMs,
+          eventKey: `${a.nodeId}:${a.iteration}:${a.attempt}`,
+        },
+        {
+          timestampMs: b.timestampMs,
+          eventKey: `${b.nodeId}:${b.iteration}:${b.attempt}`,
+        },
+      ));
+
+    const total = projected.length;
+    const items = projected.slice(
+      pagination.offset,
+      pagination.offset + pagination.limit,
+    );
+
+    return buildListResponse(items, total, pagination, warnings);
+  }
+
+  async listTimelineEvents(
+    runId: string,
+    input: Partial<TimelineFilterOpts> = {},
+  ): Promise<DashboardListResponse<DashboardTimelineEvent>> {
+    const pagination = toPagination(input);
+    const warnings: string[] = [];
+
+    const nodeEvents = this.listNodeEvents(runId, {
+      limit: 5_000,
+      offset: 0,
+      fromTs: input.fromTs,
+      toTs: input.toTs,
+    });
+    warnings.push(...nodeEvents.meta.warnings);
+
+    const [commands, toolEvents, resources] = await Promise.all([
+      this.listCommandEvents({
+        limit: 5_000,
+        offset: 0,
+        runId,
+        fromTs: input.fromTs,
+        toTs: input.toTs,
+      }),
+      this.listAgentToolEvents(runId, { limit: 5_000, offset: 0 }),
+      this.listResourceSamples(runId, { limit: 5_000, offset: 0 }),
+    ]);
+
+    warnings.push(...commands.meta.warnings);
+    warnings.push(...toolEvents.meta.warnings);
+    warnings.push(...resources.meta.warnings);
+
+    const timeline: DashboardTimelineEvent[] = [];
+
+    for (const event of nodeEvents.items) {
+      const payload = event.payload ?? {};
+      timeline.push({
+        runId: event.runId,
+        nodeId: typeof payload.nodeId === "string" ? payload.nodeId : null,
+        iteration: safeNumber(payload.iteration),
+        attempt: safeNumber(payload.attempt),
+        timestampMs: event.timestampMs,
+        timestamp: event.timestamp,
+        source: "smithers",
+        category: "node",
+        eventType: event.type,
+        eventKey: `smithers:${event.runId}:${event.seq}`,
+        summary: buildSmithersSummary(event),
+        payload,
+      });
+    }
+
+    for (const event of commands.items) {
+      timeline.push({
+        runId,
+        nodeId:
+          typeof event.details.nodeId === "string" ? event.details.nodeId : null,
+        iteration: safeNumber(event.details.iteration),
+        attempt: safeNumber(event.details.attempt),
+        timestampMs: event.timestampMs,
+        timestamp: event.timestamp,
+        source: "agentix",
+        category: "command",
+        eventType: event.event,
+        eventKey: `agentix:line:${event.line}`,
+        summary: buildCommandSummary(event),
+        payload: {
+          ...event.details,
+          command: event.command,
+          line: event.line,
+        },
+      });
+    }
+
+    for (const event of toolEvents.items) {
+      timeline.push({
+        runId,
+        nodeId: event.nodeId,
+        iteration: event.iteration,
+        attempt: event.attempt,
+        timestampMs: event.timestampMs,
+        timestamp: event.timestamp,
+        source: "telemetry",
+        category: "tool",
+        eventType: event.eventType,
+        eventKey: event.eventKey,
+        summary: buildToolSummary(event),
+        payload: {
+          ...event.payload,
+          provider: event.provider,
+          toolName: event.toolName,
+          tokenUsage: event.tokenUsage,
+        },
+      });
+    }
+
+    resources.items.forEach((sample, index) => {
+      timeline.push({
+        runId,
+        nodeId: sample.nodeId,
+        iteration: null,
+        attempt: null,
+        timestampMs: sample.timestampMs,
+        timestamp: sample.timestamp,
+        source: "resource",
+        category: "resource",
+        eventType: "resource.sample",
+        eventKey: `resource:${sample.runId}:${sample.timestampMs}:${sample.nodeId ?? ""}:${index}`,
+        summary: buildResourceSummary(sample),
+        payload: {
+          cpuPercent: sample.cpuPercent,
+          memoryRssMb: sample.memoryRssMb,
+          metadata: sample.metadata,
+        },
+      });
+    });
+
+    let filtered = timeline;
+
+    if (input.source) {
+      filtered = filtered.filter((entry) => entry.source === input.source);
+    }
+    if (input.category) {
+      filtered = filtered.filter((entry) => entry.category === input.category);
+    }
+    if (typeof input.query === "string" && input.query.trim()) {
+      const needle = input.query.trim().toLowerCase();
+      filtered = filtered.filter((entry) => {
+        const haystack = `${entry.eventType} ${entry.summary} ${JSON.stringify(entry.payload)}`;
+        return haystack.toLowerCase().includes(needle);
+      });
+    }
+    if (typeof input.fromTs === "number") {
+      filtered = filtered.filter((entry) => entry.timestampMs >= Math.floor(input.fromTs));
+    }
+    if (typeof input.toTs === "number") {
+      filtered = filtered.filter((entry) => entry.timestampMs <= Math.floor(input.toTs));
+    }
+
+    filtered.sort((a, b) =>
+      compareTimestampDesc(
+        { timestampMs: a.timestampMs, eventKey: a.eventKey },
+        { timestampMs: b.timestampMs, eventKey: b.eventKey },
+      ));
+
+    const total = filtered.length;
+    const items = filtered.slice(
+      pagination.offset,
+      pagination.offset + pagination.limit,
+    );
+
+    return buildListResponse(items, total, pagination, warnings);
   }
 
   listNodeEvents(

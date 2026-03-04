@@ -40,6 +40,23 @@ async function seedSecurityFixture(repoRoot: string): Promise<void> {
       payload_json TEXT NOT NULL,
       PRIMARY KEY (run_id, seq)
     );
+
+    CREATE TABLE _smithers_attempts (
+      run_id TEXT NOT NULL,
+      node_id TEXT NOT NULL,
+      iteration INTEGER NOT NULL DEFAULT 0,
+      attempt INTEGER NOT NULL,
+      state TEXT NOT NULL,
+      started_at_ms INTEGER NOT NULL,
+      finished_at_ms INTEGER,
+      error_json TEXT,
+      jj_pointer TEXT,
+      response_text TEXT,
+      jj_cwd TEXT,
+      cached INTEGER DEFAULT 0,
+      meta_json TEXT,
+      PRIMARY KEY (run_id, node_id, iteration, attempt)
+    );
   `);
 
   db.prepare(
@@ -71,6 +88,27 @@ async function seedSecurityFixture(repoRoot: string): Promise<void> {
       attempt: 1,
       stream: "stderr",
       text: "token=sk-abcdef1234567890abcdef1234567890",
+    }),
+  );
+
+  db.prepare(
+    `INSERT INTO _smithers_attempts (run_id, node_id, iteration, attempt, state, started_at_ms, finished_at_ms, error_json, jj_pointer, response_text, jj_cwd, cached, meta_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    "sw-security",
+    "obs-09:implement",
+    0,
+    1,
+    "finished",
+    1_900_000_000_030,
+    1_900_000_000_090,
+    null,
+    "@-",
+    "ok",
+    "/tmp/wt",
+    0,
+    JSON.stringify({
+      prompt: "Use token=sk-abcdef1234567890abcdef1234567890 in setup",
     }),
   );
 
@@ -128,6 +166,33 @@ describe("dashboard security", () => {
 
       const authenticated = await fetch(`${server.baseUrl}/api/health?token=secret-token`);
       expect(authenticated.status).toBe(200);
+    } finally {
+      await server.stop();
+    }
+  });
+
+  test("prompt audit endpoints redact secret-like prompt values", async () => {
+    const repoRoot = await createTempRepo();
+    await seedSecurityFixture(repoRoot);
+
+    const server = await startDashboardApiServer({
+      repoRoot,
+      host: "127.0.0.1",
+      port: 0,
+    });
+
+    try {
+      const response = await fetch(
+        `${server.baseUrl}/api/runs/sw-security/prompts?limit=20&offset=0`,
+      );
+      expect(response.status).toBe(200);
+      const payload = (await response.json()) as {
+        items: Array<{ promptText: string }>;
+      };
+
+      expect(payload.items).toHaveLength(1);
+      expect(payload.items[0]?.promptText).toContain("[REDACTED]");
+      expect(payload.items[0]?.promptText).not.toContain("sk-abcdef");
     } finally {
       await server.stop();
     }

@@ -148,6 +148,74 @@ export type DashboardAgentToolEvent = {
   payload: Record<string, unknown>;
 };
 
+export type DashboardPromptAuditSnapshot = {
+  runId: string;
+  nodeId: string;
+  unitId: string | null;
+  stage: string | null;
+  iteration: number;
+  attempt: number;
+  state: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
+  timestampMs: number;
+  timestamp: string;
+  promptText: string;
+  promptPreview: string;
+  promptHash: string | null;
+  responseChars: number;
+  responsePreview: string;
+};
+
+export type DashboardExecutionStepSnapshot = {
+  runId: string;
+  nodeId: string;
+  unitId: string | null;
+  stage: string | null;
+  iteration: number;
+  attempt: number;
+  state: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  durationMs: number | null;
+  timestampMs: number;
+  timestamp: string;
+  promptAvailable: boolean;
+  promptPreview: string;
+  promptHash: string | null;
+  responseChars: number;
+  cached: boolean;
+  errorMessage: string | null;
+};
+
+export type DashboardTimelineSource =
+  | "smithers"
+  | "agentix"
+  | "telemetry"
+  | "resource";
+
+export type DashboardTimelineCategory =
+  | "node"
+  | "command"
+  | "tool"
+  | "resource";
+
+export type DashboardTimelineEvent = {
+  runId: string;
+  nodeId: string | null;
+  iteration: number | null;
+  attempt: number | null;
+  timestampMs: number;
+  timestamp: string;
+  source: DashboardTimelineSource;
+  category: DashboardTimelineCategory;
+  eventType: string;
+  eventKey: string;
+  summary: string;
+  payload: Record<string, unknown>;
+};
+
 export type DashboardResourceSample = {
   runId: string;
   nodeId: string | null;
