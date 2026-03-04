@@ -9,6 +9,7 @@ Use this checklist before tagging a release.
 - [ ] `bun test` succeeds
 - [ ] `bun run release:check` succeeds
 - [ ] CI workflow is green for the release commit
+- [ ] `agentix dashboard` launches and serves `/api/health` + `/dashboard/index.html`
 
 ## Contract Integrity
 
@@ -31,12 +32,15 @@ Use this checklist before tagging a release.
 - [ ] `.agentix/` runtime artifacts are excluded from git
 - [ ] `.smithers/executions/` logs are excluded from git
 - [ ] `.agentix/events.jsonl` telemetry is present and readable locally
+- [ ] `.agentix/resource-samples.jsonl` reviewed when resource sampler is enabled
 - [ ] `agentix analytics summary --window 7d --exclude-command analytics` runs successfully
 - [ ] `.agentix/analytics/daily-YYYY-MM-DD.json` snapshot is generated for current review cycle
 - [ ] `agentix analytics failures --window 7d --top 10 --exclude-command analytics` has been reviewed
 - [ ] `docs/ops/quality-report.md` is generated and assigned follow-up owners for recurring failures
 - [ ] If `telemetry.runNonZeroExitHardGate.enabled=true`, summary command did not trip the hard gate
 - [ ] No secrets or credentials are committed
+- [ ] Dashboard API redaction masks token-like values in prompt/log/event payloads
+- [ ] Non-local dashboard bind is protected by `--token`
 - [ ] Security/performance review evidence is retained in workflow outputs
 
 ## Documentation

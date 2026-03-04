@@ -29,7 +29,7 @@ Fields:
 - `ts`: ISO timestamp
 - `level`: `info` or `error`
 - `event`: lifecycle event (`command.started`, `command.completed`, `command.failed`, `command.cancelled`)
-- `command`: one of `init`, `plan`, `run`, `status`, `monitor`, `analytics`
+- `command`: one of `init`, `plan`, `run`, `status`, `monitor`, `dashboard`, `analytics`
 - `runId`: optional workflow run ID
 - `sessionId`: optional command invocation correlation ID
 - `unitId`: optional work-unit correlation ID
@@ -97,6 +97,11 @@ This snapshot is emitted every merge-queue iteration and should be used for:
 
 ## Operational Usage
 
+- Launch dashboard:
+  - `agentix dashboard`
+  - URL: `http://127.0.0.1:43110/dashboard/index.html`
+- Non-local bind with token:
+  - `agentix dashboard --host 0.0.0.0 --token <secret>`
 - Tail events during execution:
   - `tail -f .agentix/events.jsonl`
 - Filter failed commands:
@@ -105,3 +110,12 @@ This snapshot is emitted every merge-queue iteration and should be used for:
   - `rg '"runId":"sw-' .agentix/events.jsonl`
 
 This file is local runtime telemetry and should not be committed.
+
+## Optional Runtime Telemetry Expansion
+
+Feature flags for deeper dashboard telemetry:
+
+- `AGENTIX_OBS_CODEX_TELEMETRY=1` (Codex JSON event capture)
+- `AGENTIX_OBS_CLAUDE_TELEMETRY=1` (Claude stream-json capture)
+- `AGENTIX_OBS_RESOURCE_SAMPLER=1` (CPU/RSS sampling to `.agentix/resource-samples.jsonl`)
+- `AGENTIX_OBS_RESOURCE_SAMPLE_MS=2000` (sampling interval in ms)

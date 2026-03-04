@@ -30,6 +30,7 @@ export function renderScheduledWorkflow(params: {
 
   return `import React from "react";
 import { readFileSync } from "node:fs";
+import { appendFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { createSmithers, ClaudeCodeAgent, CodexAgent } from "smithers-orchestrator";
 import { scheduledOutputSchemas } from "${importPrefix}/scheduled/schemas";
@@ -50,6 +51,14 @@ const HAS_CODEX = _config.agents.codex as boolean;
 const MAX_CONCURRENCY = _config.maxConcurrency as number;
 const MAX_PASSES = 9;
 const BASE_BRANCH = _config.baseBranch as string;
+const ENABLE_CODEX_TELEMETRY = process.env.AGENTIX_OBS_CODEX_TELEMETRY === "1";
+const ENABLE_CLAUDE_TELEMETRY = process.env.AGENTIX_OBS_CLAUDE_TELEMETRY === "1";
+const ENABLE_RESOURCE_SAMPLER = process.env.AGENTIX_OBS_RESOURCE_SAMPLER === "1";
+const RESOURCE_SAMPLE_INTERVAL_MS = Math.max(
+  250,
+  Number(process.env.AGENTIX_OBS_RESOURCE_SAMPLE_MS ?? "2000") || 2000,
+);
+const RESOURCE_SAMPLES_PATH = join(_agentixDir, "resource-samples.jsonl");
 
 // ── Load work plan ────────────────────────────────────────────────────
 
@@ -82,6 +91,8 @@ function createClaude(role: string, model: string = "claude-sonnet-4-6") {
     cwd: REPO_ROOT,
     dangerouslySkipPermissions: true,
     timeoutMs: 60 * 60 * 1000,
+    outputFormat: ENABLE_CLAUDE_TELEMETRY ? "stream-json" : "text",
+    includePartialMessages: ENABLE_CLAUDE_TELEMETRY ? true : undefined,
   });
 }
 
@@ -92,6 +103,7 @@ function createCodex(role: string) {
     cwd: REPO_ROOT,
     yolo: true,
     timeoutMs: 60 * 60 * 1000,
+    json: ENABLE_CODEX_TELEMETRY ? true : undefined,
   });
 }
 
@@ -117,6 +129,59 @@ const agents = {
   finalReviewer: chooseAgent("opus",   "Final Reviewer — Gate merge readiness with zero-slop standards"),
   mergeQueue:    chooseAgent("opus",   "MergeQueue Coordinator — Rebase and land unit branches onto main"),
 };
+
+let _resourceSamplerPrevCpu = process.cpuUsage();
+let _resourceSamplerPrevTs = Date.now();
+
+async function sampleResourceEnvelope() {
+  const nowMs = Date.now();
+  const elapsedMs = Math.max(1, nowMs - _resourceSamplerPrevTs);
+  const deltaCpu = process.cpuUsage(_resourceSamplerPrevCpu);
+  _resourceSamplerPrevCpu = process.cpuUsage();
+  _resourceSamplerPrevTs = nowMs;
+
+  const cpuCount = Math.max(1, require("node:os").cpus()?.length ?? 1);
+  const cpuPercent = Number(
+    (((deltaCpu.user + deltaCpu.system) / 1000 / elapsedMs / cpuCount) * 100).toFixed(3),
+  );
+  const rssMb = Number((process.memoryUsage().rss / (1024 * 1024)).toFixed(3));
+
+  let runId = "unknown";
+  try {
+    const { Database } = require("bun:sqlite");
+    const db = new Database(DB_PATH, { readonly: true });
+    const row = db.query(
+      "SELECT run_id FROM _smithers_runs ORDER BY created_at_ms DESC, run_id DESC LIMIT 1",
+    ).get() as { run_id?: string } | null;
+    db.close();
+    if (row?.run_id) runId = row.run_id;
+  } catch {
+    // best effort only
+  }
+
+  const record = {
+    runId,
+    nodeId: null,
+    timestampMs: nowMs,
+    timestamp: new Date(nowMs).toISOString(),
+    cpuPercent,
+    memoryRssMb: rssMb,
+    metadata: { pid: process.pid, platform: process.platform },
+  };
+
+  try {
+    await mkdir(_agentixDir, { recursive: true });
+    await appendFile(RESOURCE_SAMPLES_PATH, JSON.stringify(record) + "\\n", "utf8");
+  } catch {
+    // sampler must never break workflow execution
+  }
+}
+
+if (ENABLE_RESOURCE_SAMPLER) {
+  setInterval(() => {
+    sampleResourceEnvelope().catch(() => undefined);
+  }, RESOURCE_SAMPLE_INTERVAL_MS);
+}
 
 // ── Smithers setup ────────────────────────────────────────────────────
 

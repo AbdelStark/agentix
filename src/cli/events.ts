@@ -9,6 +9,7 @@ export type AgentixCommand =
   | "run"
   | "status"
   | "monitor"
+  | "dashboard"
   | "analytics";
 
 export type AgentixEvent = {

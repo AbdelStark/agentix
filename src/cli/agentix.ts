@@ -8,6 +8,7 @@
  *   agentix run                      Execute the initialized workflow
  *   agentix run --resume <run-id>    Resume a previous run
  *   agentix monitor                  Attach TUI to running workflow
+ *   agentix dashboard                Launch local observability dashboard
  *   agentix status                   Show current state
  *   agentix analytics summary         Telemetry summary + snapshots
  *   agentix analytics failures        Failure taxonomy/top reasons
@@ -26,6 +27,7 @@ Usage:
   agentix run                              Execute the initialized workflow
   agentix run --resume <run-id>            Resume a previous run
   agentix monitor                          Attach TUI to running workflow
+  agentix dashboard                        Launch local observability dashboard
   agentix status                           Show current state
   agentix analytics summary --window 7d    Telemetry summary + snapshot
   agentix analytics failures --top 10      Top failure reasons
@@ -86,6 +88,11 @@ async function main() {
     case "monitor": {
       const { runMonitor } = await import("./monitor-cmd");
       return runMonitor({ flags: parsed.flags, repoRoot });
+    }
+
+    case "dashboard": {
+      const { runDashboard } = await import("./dashboard-cmd");
+      return runDashboard({ flags: parsed.flags, repoRoot });
     }
 
     case "status": {

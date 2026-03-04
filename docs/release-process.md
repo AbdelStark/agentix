@@ -8,6 +8,7 @@ Use this process for every tagged release.
 2. Run:
    - `bun install --frozen-lockfile`
    - `bun run check`
+   - `agentix dashboard --help`
 3. Review policy gate configuration:
    - Confirm `agentix.policy.json` thresholds match release risk posture.
    - Confirm medium severity acceptance requires rationale.
@@ -19,7 +20,11 @@ Use this process for every tagged release.
    - Use heading format: `## [x.y.z] - YYYY-MM-DD`.
 5. Verify release consistency:
    - `bun run release:check`
-6. Run telemetry analytics review:
+6. Verify dashboard launch path:
+   - `agentix dashboard`
+   - Confirm `GET /api/health` and `GET /dashboard/index.html` return `200`
+   - Stop with `Ctrl+C`
+7. Run telemetry analytics review:
    - `bun run cli -- analytics summary --window 7d --write-report --exclude-command analytics`
    - `bun run cli -- analytics failures --window 7d --top 10 --exclude-command analytics`
    - Review `docs/ops/quality-report.md` and assign owner/actions for top recurring failures.

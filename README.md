@@ -73,6 +73,7 @@ Usage:
   agentix run                        Execute the workflow
   agentix run --resume <run-id>      Resume a previous run
   agentix monitor                    Attach TUI to running workflow
+  agentix dashboard                  Launch local observability dashboard
   agentix status                     Show current state
   agentix analytics summary          Telemetry summary + snapshots
   agentix analytics failures         Top failure reasons + taxonomy
@@ -105,6 +106,24 @@ Generates a Smithers workflow file, creates agent instances, and executes. The w
 ### `plan`
 
 Re-runs the AI decomposition using the RFC from the existing config. Useful after editing the RFC.
+
+### `dashboard`
+
+Launches the local observability web platform (read-only by default) over `.agentix` data:
+
+```bash
+agentix dashboard
+# -> http://127.0.0.1:43110/dashboard/index.html
+```
+
+Optional flags:
+
+- `--host <host>` (default `127.0.0.1`)
+- `--port <port>` (default `43110`)
+- `--open` (open browser automatically)
+- `--token <secret>` (required for non-local binds)
+- `--heartbeat-ms <n>`
+- `--replay-limit <n>`
 
 ### `resume`
 
@@ -200,6 +219,13 @@ Agentix writes structured local telemetry events to:
 - `.agentix/events.jsonl`
 
 This stream captures command lifecycle transitions (`started`, `completed`, `failed`, `cancelled`) with run IDs and troubleshooting details.
+
+For local-first web observability:
+
+- `agentix dashboard`
+- default URL: `http://127.0.0.1:43110/dashboard/index.html`
+- secure non-local bind requires token:
+  - `agentix dashboard --host 0.0.0.0 --port 43110 --token <secret>`
 
 For aggregated telemetry intelligence:
 

@@ -9,6 +9,7 @@ Detailed implementation plans for the highest-priority production hardening item
 3. [03 - Security + Performance Policy Gates](03-security-performance-policy-gates.md)
 4. [04 - Merge Queue Risk Scoring + Smart Ordering](04-merge-queue-risk-scoring-and-ordering.md)
 5. [05 - Telemetry Aggregation + Analytics Feedback Loop](05-telemetry-aggregation-and-analytics-loop.md)
+6. [06 - Observability Dashboard Local Platform](06-observability-dashboard-local-platform.md)
 
 ## Why This Sequence
 
@@ -17,6 +18,7 @@ Detailed implementation plans for the highest-priority production hardening item
 - Plan 3 introduces production policy controls on top of stronger quality data.
 - Plan 4 optimizes throughput/reliability in the merge stage with explicit risk logic.
 - Plan 5 closes the loop with measurable operational intelligence and continuous improvement.
+- Plan 6 turns telemetry + run state into a local-first web observability platform.
 
 ## Global Definition of Done
 

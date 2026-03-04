@@ -57,6 +57,7 @@ Build an opinionated agentic orchestrator that consistently produces production-
 - [Plan 03: Security + Performance Policy Gates](execution-plans/03-security-performance-policy-gates.md)
 - [Plan 04: Merge Queue Risk Scoring + Smart Ordering](execution-plans/04-merge-queue-risk-scoring-and-ordering.md)
 - [Plan 05: Telemetry Aggregation + Analytics Feedback Loop](execution-plans/05-telemetry-aggregation-and-analytics-loop.md)
+- [Plan 06: Observability Dashboard Local Platform](execution-plans/06-observability-dashboard-local-platform.md)
 
 ## Acceptance Criteria for the Roadmap
 
