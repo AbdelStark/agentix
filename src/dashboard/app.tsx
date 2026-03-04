@@ -37,6 +37,109 @@ export function resolveModuleByShortcut(key: string): ModuleId | null {
   return match ? match.id : null;
 }
 
+type LogStreamFilter = "all" | "stdout" | "stderr";
+
+export type DashboardUrlState = {
+  selectedModule: ModuleId | null;
+  selectedRunId: string | null;
+  runSearch: string;
+  selectedUnitId: string | null;
+  attemptsNodeFilter: string | null;
+  attemptsAttemptFilter: number | null;
+  logStreamFilter: LogStreamFilter;
+  logSearch: string;
+};
+
+function isModuleId(value: string): value is ModuleId {
+  return MODULES.some((module) => module.id === value);
+}
+
+function normalizeQueryValue(value: string | null): string | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function parseAttemptNumber(value: string | null): number | null {
+  const normalized = normalizeQueryValue(value);
+  if (!normalized) return null;
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, Math.floor(parsed));
+}
+
+function parseLogStreamFilter(value: string | null): LogStreamFilter {
+  if (value === "stdout" || value === "stderr") return value;
+  return "all";
+}
+
+export function readDashboardUrlState(search: string): DashboardUrlState {
+  const params = new URLSearchParams(search);
+  const selectedModuleRaw = normalizeQueryValue(params.get("module"));
+  const selectedModule = selectedModuleRaw && isModuleId(selectedModuleRaw)
+    ? selectedModuleRaw
+    : null;
+
+  return {
+    selectedModule,
+    selectedRunId: normalizeQueryValue(params.get("run")),
+    runSearch: params.get("q") ?? "",
+    selectedUnitId: normalizeQueryValue(params.get("unit")),
+    attemptsNodeFilter: normalizeQueryValue(params.get("node")),
+    attemptsAttemptFilter: parseAttemptNumber(params.get("attempt")),
+    logStreamFilter: parseLogStreamFilter(params.get("stream")),
+    logSearch: params.get("logs") ?? "",
+  };
+}
+
+export function buildDashboardSearch(
+  urlState: DashboardUrlState,
+  existingSearch = "",
+): string {
+  const params = new URLSearchParams(existingSearch);
+
+  for (const key of [
+    "module",
+    "run",
+    "q",
+    "unit",
+    "node",
+    "attempt",
+    "stream",
+    "logs",
+  ]) {
+    params.delete(key);
+  }
+
+  if (urlState.selectedModule && urlState.selectedModule !== "cockpit") {
+    params.set("module", urlState.selectedModule);
+  }
+  if (urlState.selectedRunId) {
+    params.set("run", urlState.selectedRunId);
+  }
+  if (urlState.runSearch.trim()) {
+    params.set("q", urlState.runSearch.trim());
+  }
+  if (urlState.selectedUnitId) {
+    params.set("unit", urlState.selectedUnitId);
+  }
+  if (urlState.attemptsNodeFilter) {
+    params.set("node", urlState.attemptsNodeFilter);
+  }
+  if (urlState.attemptsAttemptFilter != null) {
+    params.set("attempt", String(urlState.attemptsAttemptFilter));
+  }
+  if (urlState.logStreamFilter !== "all") {
+    params.set("stream", urlState.logStreamFilter);
+  }
+  if (urlState.logSearch.trim()) {
+    params.set("logs", urlState.logSearch.trim());
+  }
+
+  const serialized = params.toString();
+  return serialized ? `?${serialized}` : "";
+}
+
 type AppState = {
   loading: boolean;
   error: string | null;
@@ -63,7 +166,7 @@ type AppState = {
   runSearch: string;
   selectedUnitId: string | null;
   dagFilters: DagFilterState;
-  logStreamFilter: "all" | "stdout" | "stderr";
+  logStreamFilter: LogStreamFilter;
   logSearch: string;
   attemptsNodeFilter: string | null;
   attemptsAttemptFilter: number | null;
@@ -112,6 +215,143 @@ const state: AppState = {
 let eventSource: EventSource | null = null;
 let refreshDebounceTimer: Timer | null = null;
 let logViewportRaf: number | null = null;
+let lastFocusedBeforePalette: HTMLElement | null = null;
+let announcedLiveState: boolean | null = null;
+
+function getCurrentUrlState(): DashboardUrlState {
+  return {
+    selectedModule: state.selectedModule,
+    selectedRunId: state.selectedRunId,
+    runSearch: state.runSearch,
+    selectedUnitId: state.selectedUnitId,
+    attemptsNodeFilter: state.attemptsNodeFilter,
+    attemptsAttemptFilter: state.attemptsAttemptFilter,
+    logStreamFilter: state.logStreamFilter,
+    logSearch: state.logSearch,
+  };
+}
+
+function syncUrlState(mode: "push" | "replace" = "replace") {
+  if (typeof window === "undefined") return;
+  const search = buildDashboardSearch(getCurrentUrlState(), window.location.search);
+  const nextUrl = `${window.location.pathname}${search}${window.location.hash}`;
+  const currentUrl = `${window.location.pathname}${window.location.search}${window.location.hash}`;
+  if (nextUrl === currentUrl) return;
+  if (mode === "push") {
+    window.history.pushState(null, "", nextUrl);
+    return;
+  }
+  window.history.replaceState(null, "", nextUrl);
+}
+
+function applyUrlState(urlState: DashboardUrlState) {
+  if (urlState.selectedModule) {
+    state.selectedModule = urlState.selectedModule;
+  }
+  state.runSearch = urlState.runSearch;
+  state.selectedUnitId = urlState.selectedUnitId;
+  state.logStreamFilter = urlState.logStreamFilter;
+  state.logSearch = urlState.logSearch;
+  setAttemptFocus(urlState.attemptsNodeFilter, urlState.attemptsAttemptFilter);
+}
+
+function focusPaletteFirstAction() {
+  if (!state.paletteOpen) return;
+  const target = document.querySelector<HTMLElement>(
+    "[data-palette-module], [data-palette-run], #palette-close",
+  );
+  target?.focus();
+}
+
+function handlePaletteFocusTrap(event: KeyboardEvent): boolean {
+  if (!state.paletteOpen || event.key !== "Tab") return false;
+  const focusable = Array.from(
+    document.querySelectorAll<HTMLElement>(
+      "#command-palette button, #command-palette [href], #command-palette input, #command-palette select, #command-palette textarea, #command-palette [tabindex]:not([tabindex='-1'])",
+    ),
+  ).filter((element) => !element.hasAttribute("disabled"));
+  if (focusable.length === 0) return false;
+
+  const first = focusable[0]!;
+  const last = focusable[focusable.length - 1]!;
+  const active = document.activeElement as HTMLElement | null;
+  if (!active || !focusable.includes(active)) {
+    event.preventDefault();
+    first.focus();
+    return true;
+  }
+  if (event.shiftKey && active === first) {
+    event.preventDefault();
+    last.focus();
+    return true;
+  }
+  if (!event.shiftKey && active === last) {
+    event.preventDefault();
+    first.focus();
+    return true;
+  }
+  return false;
+}
+
+function openPalette() {
+  if (state.paletteOpen) return;
+  lastFocusedBeforePalette =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null;
+  state.paletteOpen = true;
+  render();
+}
+
+function closePalette(opts: { restoreFocus?: boolean } = {}) {
+  if (!state.paletteOpen) return;
+  const restoreFocus = opts.restoreFocus ?? true;
+  state.paletteOpen = false;
+  render();
+  if (!restoreFocus) return;
+  window.requestAnimationFrame(() => {
+    lastFocusedBeforePalette?.focus();
+  });
+}
+
+function selectRun(
+  runId: string,
+  opts: { historyMode?: "push" | "replace" | "none"; resetFocus?: boolean } = {},
+) {
+  if (!runId) return;
+  const historyMode = opts.historyMode ?? "push";
+  const resetFocus = opts.resetFocus ?? true;
+
+  if (runId === state.selectedRunId && !state.loading) {
+    if (historyMode !== "none") {
+      syncUrlState(historyMode);
+    }
+    render();
+    return;
+  }
+
+  state.selectedRunId = runId;
+  if (resetFocus) {
+    state.selectedUnitId = null;
+    setAttemptFocus(null, null);
+  }
+  state.loading = true;
+  if (historyMode !== "none") {
+    syncUrlState(historyMode);
+  }
+  render();
+
+  refreshRunScopedData(runId)
+    .then(() => {
+      state.loading = false;
+      state.error = null;
+      connectLiveStream();
+      render();
+    })
+    .catch((error) => {
+      state.loading = false;
+      state.error = error instanceof Error ? error.message : String(error);
+      render();
+    });
+}
 
 function scheduleRunRefresh() {
   if (!state.selectedRunId) return;
@@ -245,11 +485,20 @@ function renderSidebarRuns(): string {
     );
   });
 
+  if (runs.length === 0) {
+    return "<p class='muted run-list-empty'>No runs match your filter.</p>";
+  }
+
   return runs
     .map((run) => {
       const selected = run.runId === state.selectedRunId;
       return `
-        <button class="run-item ${selected ? "selected" : ""}" data-run-id="${escapeHtml(String(run.runId ?? ""))}">
+        <button
+          type="button"
+          class="run-item ${selected ? "selected" : ""}"
+          data-run-id="${escapeHtml(String(run.runId ?? ""))}"
+          aria-pressed="${selected ? "true" : "false"}"
+        >
           <span class="run-id">${escapeHtml(String(run.runId ?? ""))}</span>
           <span class="run-meta">${escapeHtml(String(run.status ?? "unknown"))} • ${formatDuration(run.durationMs)}</span>
           <span class="run-meta">${formatDate(run.createdAt)}</span>
@@ -438,7 +687,7 @@ function renderPalette(): string {
 
   const moduleRows = MODULES.map(
     (module) => `
-      <button class="palette-item" data-palette-module="${module.id}">
+      <button type="button" class="palette-item" data-palette-module="${module.id}">
         <span>${escapeHtml(module.label)}</span>
         <span class="muted">${module.shortcut}</span>
       </button>
@@ -449,7 +698,7 @@ function renderPalette(): string {
     .slice(0, 8)
     .map(
       (run) => `
-        <button class="palette-item" data-palette-run="${run.runId}">
+        <button type="button" class="palette-item" data-palette-run="${escapeHtml(String(run.runId ?? ""))}">
           <span>${escapeHtml(String(run.runId ?? ""))}</span>
           <span class="muted">${escapeHtml(String(run.status ?? "unknown"))}</span>
         </button>
@@ -459,8 +708,11 @@ function renderPalette(): string {
 
   return `
     <div class="palette-backdrop" id="palette-backdrop">
-      <div class="glass-card palette-panel" role="dialog" aria-modal="true">
-        <h3>Command Palette</h3>
+      <div class="glass-card palette-panel" id="command-palette" role="dialog" aria-modal="true" aria-labelledby="command-palette-title">
+        <header class="palette-header">
+          <h3 id="command-palette-title">Command Palette</h3>
+          <button type="button" id="palette-close" class="lucid-button" aria-label="Close command palette">Esc</button>
+        </header>
         <p class="muted">Switch modules and runs with keyboard precision.</p>
         <div class="palette-columns">
           <section>
@@ -480,6 +732,7 @@ function renderPalette(): string {
 function renderHeaderOnly() {
   const statusEl = document.getElementById("live-status");
   const hbEl = document.getElementById("live-heartbeat");
+  const announcerEl = document.getElementById("live-announcer");
   if (statusEl) {
     statusEl.textContent = state.sseConnected ? "Live" : "Offline";
     statusEl.className = `status-chip ${state.sseConnected ? "status-pass" : "status-fail"}`;
@@ -488,6 +741,12 @@ function renderHeaderOnly() {
     hbEl.textContent = state.lastHeartbeat
       ? `Heartbeat ${formatDate(state.lastHeartbeat)}`
       : "Heartbeat -";
+  }
+  if (announcerEl && announcedLiveState !== state.sseConnected) {
+    announcerEl.textContent = state.sseConnected
+      ? "Live stream connected."
+      : "Live stream disconnected.";
+    announcedLiveState = state.sseConnected;
   }
 }
 
@@ -504,7 +763,16 @@ function render() {
 
   const moduleTabs = MODULES.map(
     (module) => `
-      <button class="module-tab ${state.selectedModule === module.id ? "active" : ""}" data-module="${module.id}">
+      <button
+        type="button"
+        id="module-tab-${module.id}"
+        role="tab"
+        aria-selected="${state.selectedModule === module.id ? "true" : "false"}"
+        aria-controls="module-content"
+        tabindex="${state.selectedModule === module.id ? "0" : "-1"}"
+        class="module-tab ${state.selectedModule === module.id ? "active" : ""}"
+        data-module="${module.id}"
+      >
         ${module.label}
         <span class="muted">${module.shortcut}</span>
       </button>
@@ -520,7 +788,14 @@ function render() {
           <p class="muted">Observability Dashboard</p>
         </header>
         <label class="sidebar-search">
-          <input id="run-search" class="lucid-input" placeholder="Filter runs" value="${escapeHtml(state.runSearch)}" />
+          <span class="sr-only">Filter runs by run ID or status</span>
+          <input
+            id="run-search"
+            class="lucid-input"
+            placeholder="Filter runs"
+            aria-label="Filter runs by run ID or status"
+            value="${escapeHtml(state.runSearch)}"
+          />
         </label>
         <div class="run-list">${renderSidebarRuns()}</div>
       </aside>
@@ -529,18 +804,35 @@ function render() {
         <header class="glass-panel topbar">
           <div>
             <h2>${escapeHtml(state.selectedRunId ?? "No active run")}</h2>
-            <p class="muted">${escapeHtml(state.error ? `Error: ${state.error}` : state.runSummary?.run?.status ?? "Waiting for data")}</p>
+            <p class="muted ${state.error ? "danger" : ""}">${escapeHtml(state.error ? `Error: ${state.error}` : state.runSummary?.run?.status ?? "Waiting for data")}</p>
           </div>
           <div class="topbar-status">
+            <span id="live-announcer" class="sr-only" aria-live="polite"></span>
             <span id="live-status" class="status-chip ${state.sseConnected ? "status-pass" : "status-fail"}">${state.sseConnected ? "Live" : "Offline"}</span>
             <span id="live-heartbeat" class="muted">${state.lastHeartbeat ? `Heartbeat ${formatDate(state.lastHeartbeat)}` : "Heartbeat -"}</span>
-            <button id="palette-toggle" class="lucid-button" aria-label="Open command palette">⌘K</button>
+            <button
+              type="button"
+              id="palette-toggle"
+              class="lucid-button"
+              aria-haspopup="dialog"
+              aria-expanded="${state.paletteOpen ? "true" : "false"}"
+              aria-controls="command-palette"
+              aria-label="Open command palette"
+            >
+              ⌘K
+            </button>
           </div>
         </header>
 
-        <nav class="glass-panel module-nav">${moduleTabs}</nav>
+        <nav class="glass-panel module-nav" role="tablist" aria-label="Dashboard modules">${moduleTabs}</nav>
 
-        <section id="module-content" class="module-content ${state.loading ? "loading" : ""}">
+        <section
+          id="module-content"
+          class="module-content ${state.loading ? "loading" : ""}"
+          role="tabpanel"
+          aria-labelledby="module-tab-${state.selectedModule}"
+          tabindex="-1"
+        >
           ${state.loading ? "<article class='glass-card'><p>Loading dashboard data…</p></article>" : renderModuleContent()}
         </section>
 
@@ -552,43 +844,60 @@ function render() {
 
   bindGlobalEvents();
   bindModuleEvents();
-}
-
-function closePalette() {
-  if (!state.paletteOpen) return;
-  state.paletteOpen = false;
-  render();
+  if (state.paletteOpen) {
+    window.requestAnimationFrame(() => {
+      focusPaletteFirstAction();
+    });
+  }
 }
 
 function bindGlobalEvents() {
   document.querySelectorAll<HTMLButtonElement>("[data-run-id]").forEach((button) => {
     button.addEventListener("click", () => {
       const runId = button.dataset.runId;
-      if (!runId || runId === state.selectedRunId) return;
-      state.selectedRunId = runId;
-      state.selectedUnitId = null;
-      setAttemptFocus(null, null);
-      state.loading = true;
-      render();
-      refreshRunScopedData(runId)
-        .then(() => {
-          state.loading = false;
-          connectLiveStream();
-          render();
-        })
-        .catch((error) => {
-          state.loading = false;
-          state.error = error instanceof Error ? error.message : String(error);
-          render();
-        });
+      if (!runId) return;
+      selectRun(runId, { historyMode: "push", resetFocus: true });
     });
   });
 
-  document.querySelectorAll<HTMLButtonElement>("[data-module]").forEach((button) => {
+  const moduleButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-module]"));
+  moduleButtons.forEach((button) => {
     button.addEventListener("click", () => {
       const moduleId = button.dataset.module as ModuleId;
       state.selectedModule = moduleId;
+      syncUrlState("push");
       render();
+    });
+
+    button.addEventListener("keydown", (event) => {
+      if (
+        event.key !== "ArrowRight" &&
+        event.key !== "ArrowLeft" &&
+        event.key !== "Home" &&
+        event.key !== "End"
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      if (moduleButtons.length === 0) return;
+
+      const index = moduleButtons.indexOf(button);
+      let nextIndex = index;
+      if (event.key === "ArrowRight") {
+        nextIndex = (index + 1) % moduleButtons.length;
+      } else if (event.key === "ArrowLeft") {
+        nextIndex = (index - 1 + moduleButtons.length) % moduleButtons.length;
+      } else if (event.key === "Home") {
+        nextIndex = 0;
+      } else if (event.key === "End") {
+        nextIndex = moduleButtons.length - 1;
+      }
+
+      const nextButton = moduleButtons[nextIndex];
+      if (!nextButton) return;
+      nextButton.focus();
+      nextButton.click();
     });
   });
 
@@ -596,22 +905,31 @@ function bindGlobalEvents() {
   if (runSearch) {
     runSearch.addEventListener("input", () => {
       state.runSearch = runSearch.value;
+      syncUrlState("replace");
       render();
     });
   }
 
   const paletteToggle = document.getElementById("palette-toggle");
   paletteToggle?.addEventListener("click", () => {
-    state.paletteOpen = !state.paletteOpen;
-    render();
+    if (state.paletteOpen) {
+      closePalette();
+      return;
+    }
+    openPalette();
+  });
+
+  const paletteClose = document.getElementById("palette-close");
+  paletteClose?.addEventListener("click", () => {
+    closePalette();
   });
 
   document.querySelectorAll<HTMLButtonElement>("[data-palette-module]").forEach((button) => {
     button.addEventListener("click", () => {
       const moduleId = button.dataset.paletteModule as ModuleId;
       state.selectedModule = moduleId;
-      closePalette();
-      render();
+      syncUrlState("push");
+      closePalette({ restoreFocus: false });
     });
   });
 
@@ -619,24 +937,8 @@ function bindGlobalEvents() {
     button.addEventListener("click", () => {
       const runId = button.dataset.paletteRun;
       if (!runId) return;
-      closePalette();
-      if (runId !== state.selectedRunId) {
-        state.selectedRunId = runId;
-        setAttemptFocus(null, null);
-        state.loading = true;
-        render();
-        refreshRunScopedData(runId)
-          .then(() => {
-            state.loading = false;
-            connectLiveStream();
-            render();
-          })
-          .catch((error) => {
-            state.loading = false;
-            state.error = error instanceof Error ? error.message : String(error);
-            render();
-          });
-      }
+      closePalette({ restoreFocus: false });
+      selectRun(runId, { historyMode: "push", resetFocus: true });
     });
   });
 
@@ -664,6 +966,7 @@ function bindModuleEvents() {
         action === "telemetry"
       ) {
         state.selectedModule = action;
+        syncUrlState("push");
         render();
       }
     });
@@ -672,8 +975,9 @@ function bindModuleEvents() {
   const streamSelect = document.getElementById("log-stream-filter") as HTMLSelectElement | null;
   if (streamSelect) {
     streamSelect.addEventListener("change", () => {
-      state.logStreamFilter = streamSelect.value as "all" | "stdout" | "stderr";
+      state.logStreamFilter = streamSelect.value as LogStreamFilter;
       state.logScrollTopPx = 0;
+      syncUrlState("replace");
       renderModuleOnly();
     });
   }
@@ -683,6 +987,7 @@ function bindModuleEvents() {
     logSearch.addEventListener("input", () => {
       state.logSearch = logSearch.value;
       state.logScrollTopPx = 0;
+      syncUrlState("replace");
       renderModuleOnly();
     });
   }
@@ -690,6 +995,7 @@ function bindModuleEvents() {
   const attemptFocusReset = document.getElementById("attempt-focus-reset");
   attemptFocusReset?.addEventListener("click", () => {
     setAttemptFocus(null, null);
+    syncUrlState("replace");
     renderModuleOnly();
   });
 
@@ -709,7 +1015,7 @@ function bindModuleEvents() {
     });
   }
 
-  document.querySelectorAll<HTMLElement>(".timeline-row[data-attempt-node]").forEach((row) => {
+  document.querySelectorAll<HTMLButtonElement>(".timeline-row[data-attempt-node]").forEach((row) => {
     row.addEventListener("click", () => {
       const nodeId = row.dataset.attemptNode ?? null;
       const rawAttempt = row.dataset.attemptId ?? "";
@@ -717,6 +1023,7 @@ function bindModuleEvents() {
         ? Number(rawAttempt)
         : null;
       setAttemptFocus(nodeId, attempt);
+      syncUrlState("replace");
       renderModuleOnly();
     });
   });
@@ -737,6 +1044,7 @@ function bindModuleEvents() {
       });
       if (!focus) return;
       setAttemptFocus(focus.nodeId, focus.attempt);
+      syncUrlState("replace");
       renderModuleOnly();
     });
   });
@@ -745,6 +1053,7 @@ function bindModuleEvents() {
   if (tier) {
     tier.addEventListener("change", () => {
       state.dagFilters.tier = tier.value;
+      syncUrlState("replace");
       renderModuleOnly();
     });
   }
@@ -753,6 +1062,7 @@ function bindModuleEvents() {
   if (priority) {
     priority.addEventListener("change", () => {
       state.dagFilters.priority = priority.value;
+      syncUrlState("replace");
       renderModuleOnly();
     });
   }
@@ -761,6 +1071,7 @@ function bindModuleEvents() {
   if (failedOnly) {
     failedOnly.addEventListener("change", () => {
       state.dagFilters.failedOnly = failedOnly.checked;
+      syncUrlState("replace");
       renderModuleOnly();
     });
   }
@@ -769,16 +1080,18 @@ function bindModuleEvents() {
   if (evictedOnly) {
     evictedOnly.addEventListener("change", () => {
       state.dagFilters.evictedOnly = evictedOnly.checked;
+      syncUrlState("replace");
       renderModuleOnly();
     });
   }
 
-  document.querySelectorAll<HTMLElement>(".dag-card[data-unit-id]").forEach((card) => {
+  document.querySelectorAll<HTMLButtonElement>(".dag-card[data-unit-id]").forEach((card) => {
     card.addEventListener("click", () => {
       const unitId = card.dataset.unitId;
       if (!unitId) return;
       state.selectedUnitId = unitId;
       state.selectedModule = "cockpit";
+      syncUrlState("push");
       render();
     });
   });
@@ -793,11 +1106,18 @@ function registerKeyboardShortcuts() {
       target?.tagName === "SELECT" ||
       target?.isContentEditable === true;
 
+    if (handlePaletteFocusTrap(event)) {
+      return;
+    }
+
     const withCommand = (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k";
     if (withCommand) {
       event.preventDefault();
-      state.paletteOpen = !state.paletteOpen;
-      render();
+      if (state.paletteOpen) {
+        closePalette();
+        return;
+      }
+      openPalette();
       return;
     }
 
@@ -811,13 +1131,35 @@ function registerKeyboardShortcuts() {
     const module = MODULES.find((entry) => entry.shortcut === event.key);
     if (module && !event.metaKey && !event.ctrlKey && !event.altKey) {
       state.selectedModule = module.id;
+      syncUrlState("push");
       render();
     }
   });
 }
 
+function registerHistoryNavigation() {
+  window.addEventListener("popstate", () => {
+    const snapshot = readDashboardUrlState(window.location.search);
+    applyUrlState(snapshot);
+    const runId = snapshot.selectedRunId;
+    const fallbackRunId = state.runs[0]?.runId ? String(state.runs[0].runId) : null;
+    const nextRunId = runId ?? fallbackRunId;
+    if (nextRunId && nextRunId !== state.selectedRunId) {
+      const knownRunIds = new Set(state.runs.map((run) => String(run.runId ?? "")));
+      if (knownRunIds.has(nextRunId)) {
+        selectRun(nextRunId, { historyMode: "none", resetFocus: false });
+        return;
+      }
+    }
+    render();
+  });
+}
+
 async function boot() {
   try {
+    const initialUrlState = readDashboardUrlState(window.location.search);
+    applyUrlState(initialUrlState);
+
     state.loading = true;
     render();
 
@@ -837,7 +1179,11 @@ async function boot() {
     state.workPlan = workPlan.workPlan;
     state.warnings = collectWarnings(runs, traces, analytics, commands, workPlan);
 
-    state.selectedRunId = state.runs[0]?.runId ?? null;
+    const runIds = new Set(state.runs.map((run) => String(run.runId ?? "")));
+    const runFromUrl = initialUrlState.selectedRunId;
+    state.selectedRunId = runFromUrl && runIds.has(runFromUrl)
+      ? runFromUrl
+      : state.runs[0]?.runId ?? null;
 
     if (state.selectedRunId) {
       await refreshRunScopedData(state.selectedRunId);
@@ -849,6 +1195,8 @@ async function boot() {
 
     render();
     registerKeyboardShortcuts();
+    registerHistoryNavigation();
+    syncUrlState("replace");
 
     if (health.status !== "ok") {
       state.error = `API health status: ${health.status}`;

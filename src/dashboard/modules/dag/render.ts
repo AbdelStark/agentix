@@ -66,7 +66,12 @@ export function renderDag(opts: {
               : "status-pending";
 
       return `
-        <article class="glass-card dag-card" data-unit-id="${escapeHtml(node.id)}">
+        <button
+          type="button"
+          class="glass-card dag-card"
+          data-unit-id="${escapeHtml(node.id)}"
+          aria-label="Inspect unit ${escapeHtml(node.id)}"
+        >
           <header>
             <h4>${escapeHtml(node.id)}</h4>
             <span class="status-chip ${stateClass}">${escapeHtml(node.state)}</span>
@@ -75,7 +80,7 @@ export function renderDag(opts: {
           <p class="dag-card-meta">tier ${escapeHtml(node.tier)} • priority ${escapeHtml(node.priority)}</p>
           <p class="dag-card-meta">deps ${escapeHtml(node.deps.length ? node.deps.join(", ") : "none")}</p>
           ${evicted ? '<p class="dag-card-meta danger">Latest merge queue status: evicted</p>' : ""}
-        </article>
+        </button>
       `;
     })
     .join("");

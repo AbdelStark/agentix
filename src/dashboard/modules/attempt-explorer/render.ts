@@ -121,12 +121,18 @@ export function renderAttemptExplorer(opts: {
       const attemptsMarkup = group.attempts
         .map(
           (attempt) => `
-            <div class="timeline-row" data-attempt-node="${escapeHtml(group.nodeId)}" data-attempt-id="${attempt.attempt}">
+            <button
+              type="button"
+              class="timeline-row"
+              data-attempt-node="${escapeHtml(group.nodeId)}"
+              data-attempt-id="${attempt.attempt}"
+              aria-label="Focus ${escapeHtml(group.nodeId)} attempt ${attempt.attempt}"
+            >
               <span class="timeline-pill">#${attempt.attempt}</span>
               <span class="timeline-state">${attempt.state}</span>
               <span>${formatDuration(attempt.durationMs)}</span>
               <span class="timeline-sub">${formatDate(attempt.startedAt)}</span>
-            </div>
+            </button>
           `,
         )
         .join("");
@@ -169,7 +175,7 @@ export function renderAttemptExplorer(opts: {
         ? event.payload.text
         : event.type;
       return `
-        <button class="event-row" data-event-node="${escapeHtml(nodeId)}" data-event-attempt="${attempt ?? ""}">
+        <button type="button" class="event-row" data-event-node="${escapeHtml(nodeId)}" data-event-attempt="${attempt ?? ""}">
           <span class="log-stamp">${escapeHtml(event.timestamp)}</span>
           <span class="log-node">${escapeHtml(nodeId)}</span>
           <span class="log-text">${escapeHtml(text.slice(0, 180))}</span>
@@ -218,7 +224,7 @@ export function renderAttemptExplorer(opts: {
               Search
               <input id="log-search" class="lucid-input" value="${escapeHtml(opts.search)}" placeholder="node id, error, stack" />
             </label>
-            <button id="attempt-focus-reset" class="lucid-button">Reset Focus</button>
+            <button type="button" id="attempt-focus-reset" class="lucid-button">Reset Focus</button>
           </div>
         </header>
         <p class="muted">Showing rows ${startLabel}-${endLabel} of ${filteredLogs.length} (virtualized).</p>

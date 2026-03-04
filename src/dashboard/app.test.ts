@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
-import { getDashboardModules, resolveModuleByShortcut } from "./app";
+import {
+  buildDashboardSearch,
+  getDashboardModules,
+  readDashboardUrlState,
+  resolveModuleByShortcut,
+} from "./app";
 
 describe("dashboard app routing", () => {
   test("exposes deterministic module registry", () => {
@@ -19,5 +24,69 @@ describe("dashboard app routing", () => {
     expect(resolveModuleByShortcut("1")).toBe("cockpit");
     expect(resolveModuleByShortcut("4")).toBe("readiness");
     expect(resolveModuleByShortcut("9")).toBeNull();
+  });
+
+  test("parses URL state using defensive defaults", () => {
+    expect(
+      readDashboardUrlState(
+        "?module=dag&run=run-42&q=failed&unit=obs03&node=node.plan&attempt=2&stream=stderr&logs=timeout",
+      ),
+    ).toEqual({
+      selectedModule: "dag",
+      selectedRunId: "run-42",
+      runSearch: "failed",
+      selectedUnitId: "obs03",
+      attemptsNodeFilter: "node.plan",
+      attemptsAttemptFilter: 2,
+      logStreamFilter: "stderr",
+      logSearch: "timeout",
+    });
+
+    expect(readDashboardUrlState("?module=nope&attempt=bad&stream=all")).toEqual({
+      selectedModule: null,
+      selectedRunId: null,
+      runSearch: "",
+      selectedUnitId: null,
+      attemptsNodeFilter: null,
+      attemptsAttemptFilter: null,
+      logStreamFilter: "all",
+      logSearch: "",
+    });
+  });
+
+  test("serializes URL state and keeps security token query params", () => {
+    expect(
+      buildDashboardSearch(
+        {
+          selectedModule: "attempts",
+          selectedRunId: "run-99",
+          runSearch: "failed",
+          selectedUnitId: "obs04",
+          attemptsNodeFilter: "node.implement",
+          attemptsAttemptFilter: 3,
+          logStreamFilter: "stderr",
+          logSearch: "stack",
+        },
+        "?token=secret-token",
+      ),
+    ).toBe(
+      "?token=secret-token&module=attempts&run=run-99&q=failed&unit=obs04&node=node.implement&attempt=3&stream=stderr&logs=stack",
+    );
+
+    expect(
+      buildDashboardSearch(
+        {
+          selectedModule: "cockpit",
+          selectedRunId: null,
+          runSearch: "",
+          selectedUnitId: null,
+          attemptsNodeFilter: null,
+          attemptsAttemptFilter: null,
+          logStreamFilter: "all",
+          logSearch: "",
+        },
+        "?token=secret-token&module=dag",
+      ),
+    ).toBe("?token=secret-token");
   });
 });

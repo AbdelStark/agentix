@@ -41,7 +41,7 @@ export function renderGateBoard(opts: {
           }
           ${
             gate.actionTarget
-              ? `<button class="lucid-button gate-action" data-gate-action="${gate.actionTarget}">Inspect in ${gate.actionTarget}</button>`
+              ? `<button type="button" class="lucid-button gate-action" data-gate-action="${gate.actionTarget}">Inspect in ${gate.actionTarget}</button>`
               : ""
           }
         </article>

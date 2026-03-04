@@ -15,6 +15,10 @@
   --running: rgba(37, 110, 215, 0.92);
   --pending: rgba(76, 86, 106, 0.86);
   --ease-fluid: cubic-bezier(0.32, 0.72, 0, 1);
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-right: env(safe-area-inset-right, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-left: env(safe-area-inset-left, 0px);
 }
 
 * {
@@ -44,6 +48,18 @@ code {
   position: relative;
 }
 
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .bg-mesh {
   position: fixed;
   inset: 0;
@@ -61,7 +77,11 @@ code {
   grid-template-columns: 320px 1fr;
   gap: 1.5rem;
   min-height: 100vh;
-  padding: 1.5rem;
+  padding:
+    max(1.5rem, var(--safe-top))
+    max(1.5rem, var(--safe-right))
+    max(1.5rem, var(--safe-bottom))
+    max(1.5rem, var(--safe-left));
 }
 
 .main-pane {
@@ -161,6 +181,23 @@ code {
   transition: transform 200ms var(--ease-fluid), box-shadow 200ms var(--ease-fluid), border-color 200ms var(--ease-fluid), background 200ms var(--ease-fluid);
 }
 
+.run-list-empty {
+  margin: 0.35rem 0;
+}
+
+.run-item,
+.module-tab,
+.lucid-button,
+.palette-item,
+.timeline-row,
+.event-row,
+.dag-card {
+  appearance: none;
+  -webkit-appearance: none;
+  font: inherit;
+  color: inherit;
+}
+
 .run-item:hover {
   transform: translateY(-1px);
   border-color: rgba(58, 125, 238, 0.2);
@@ -226,7 +263,10 @@ code {
 .lucid-button:focus-visible,
 .module-tab:focus-visible,
 .run-item:focus-visible,
-.palette-item:focus-visible {
+.palette-item:focus-visible,
+.timeline-row:focus-visible,
+.event-row:focus-visible,
+.dag-card:focus-visible {
   outline: none;
   box-shadow:
     0 0 0 4px rgba(47, 109, 218, 0.22),
@@ -252,7 +292,12 @@ code {
   align-items: center;
   gap: 0.52rem;
   cursor: pointer;
-  transition: all 230ms var(--ease-fluid);
+  transition:
+    border-color 230ms var(--ease-fluid),
+    color 230ms var(--ease-fluid),
+    box-shadow 230ms var(--ease-fluid),
+    background 230ms var(--ease-fluid),
+    transform 230ms var(--ease-fluid);
 }
 
 .module-tab.active {
@@ -399,6 +444,8 @@ code {
 }
 
 .dag-card {
+  width: 100%;
+  text-align: left;
   cursor: pointer;
   transition: transform 210ms var(--ease-fluid), box-shadow 210ms var(--ease-fluid), background 210ms var(--ease-fluid);
 }
@@ -450,14 +497,21 @@ code {
   grid-template-columns: auto auto auto 1fr;
   gap: 0.5rem;
   align-items: center;
+  width: 100%;
+  border: 1px solid transparent;
+  text-align: left;
   padding: 0.48rem 0.56rem;
   border-radius: 0.82rem;
   background: rgba(255, 255, 255, 0.3);
   cursor: pointer;
-  transition: background 180ms var(--ease-fluid), transform 180ms var(--ease-fluid);
+  transition:
+    border-color 180ms var(--ease-fluid),
+    background 180ms var(--ease-fluid),
+    transform 180ms var(--ease-fluid);
 }
 
 .timeline-row:hover {
+  border-color: rgba(57, 116, 219, 0.22);
   background: rgba(255, 255, 255, 0.56);
   transform: translateY(-1px);
 }
@@ -543,6 +597,7 @@ code {
   padding: 0.55rem 0.65rem;
   color: inherit;
   cursor: pointer;
+  font: inherit;
   transition: border-color 180ms var(--ease-fluid), background 180ms var(--ease-fluid);
 }
 
@@ -656,6 +711,13 @@ code {
   padding: 1.25rem;
 }
 
+.palette-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .palette-columns {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -672,7 +734,11 @@ code {
   display: flex;
   justify-content: space-between;
   cursor: pointer;
-  transition: all 190ms var(--ease-fluid);
+  transition:
+    border-color 190ms var(--ease-fluid),
+    box-shadow 190ms var(--ease-fluid),
+    background 190ms var(--ease-fluid),
+    transform 190ms var(--ease-fluid);
 }
 
 .palette-item:hover {
@@ -732,6 +798,22 @@ code {
   .row-actions {
     width: 100%;
     flex-wrap: wrap;
+  }
+  .topbar-status {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }
 
