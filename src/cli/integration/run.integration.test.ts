@@ -130,6 +130,9 @@ describe("run command integration", () => {
     expect(completed.command).toBe("run");
     expect(completed.runId).toBe("sw-existing");
     expect(completed.details?.mode).toBe("resume");
+    expect(
+      events.find((entry) => entry.event === "run.resume.failure_snapshot"),
+    ).toBeUndefined();
   });
 
   test("passes force resume flag to smithers when --resume-force is enabled", async () => {
@@ -238,6 +241,22 @@ describe("run command integration", () => {
     ]);
 
     const events = await readAgentixEvents(repoRoot);
+    const failureSnapshot = expectEvent(events, "run.resume.failure_snapshot");
+    expect(failureSnapshot.command).toBe("run");
+    expect(failureSnapshot.runId).toBe("sw-stuck");
+    expect(failureSnapshot.details?.failedNodeCount).toBe(1);
+    expect(failureSnapshot.details?.failedAttemptCount).toBe(2);
+    const latestFailedAttempts = Array.isArray(
+      failureSnapshot.details?.latestFailedAttempts,
+    )
+      ? (failureSnapshot.details?.latestFailedAttempts as Array<{
+          message?: string;
+        }>)
+      : [];
+    expect(latestFailedAttempts[0]?.message ?? "").toContain(
+      "CLI timed out after 300000ms",
+    );
+
     const recovered = expectEvent(events, "run.resume.recovered");
     expect(recovered.command).toBe("run");
     expect(recovered.runId).toBe("sw-stuck");

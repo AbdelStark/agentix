@@ -6,7 +6,7 @@
  */
 
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, readFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
@@ -17,6 +17,7 @@ import {
   promptChoice as promptChoiceDefault,
   type ParsedArgs,
 } from "./shared";
+import { renderScheduledWorkflow } from "./render-scheduled-workflow";
 import { appendAgentixEvent } from "./events";
 import { agentixConfigSchema, type AgentixConfig } from "../scheduled/types";
 import type {
@@ -89,6 +90,22 @@ type ResumeRecoverySummary = {
   skippedReason: string | null;
 };
 
+type ResumeFailureAttemptSummary = {
+  nodeId: string;
+  iteration: number;
+  attempt: number;
+  finishedAtMs: number | null;
+  message: string | null;
+};
+
+type ResumeFailureSnapshot = {
+  runId: string;
+  runStatus: string | null;
+  failedNodeCount: number;
+  failedAttemptCount: number;
+  latestFailedAttempts: ResumeFailureAttemptSummary[];
+};
+
 function tableExists(db: any, tableName: string): boolean {
   try {
     const row = db
@@ -97,6 +114,143 @@ function tableExists(db: any, tableName: string): boolean {
     return !!row;
   } catch {
     return false;
+  }
+}
+
+function extractFailureMessage(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : null;
+  }
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const nested = extractFailureMessage(item);
+      if (nested) return nested;
+    }
+    return null;
+  }
+  if (value && typeof value === "object") {
+    const payload = value as Record<string, unknown>;
+    for (const key of [
+      "message",
+      "error",
+      "reason",
+      "detail",
+      "stderr",
+      "stdout",
+    ] as const) {
+      const nested = extractFailureMessage(payload[key]);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+function parseAttemptErrorMessage(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = JSON.parse(trimmed);
+    return extractFailureMessage(parsed) ?? trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
+function truncateText(text: string | null, maxChars = 240): string | null {
+  if (!text || text.length <= maxChars) return text;
+  return `${text.slice(0, Math.max(0, maxChars - 3))}...`;
+}
+
+async function loadResumeFailureSnapshot(opts: {
+  dbPath: string;
+  runId: string;
+  maxAttempts?: number;
+}): Promise<ResumeFailureSnapshot | null> {
+  const { dbPath, runId, maxAttempts = 5 } = opts;
+  if (!existsSync(dbPath)) return null;
+
+  let db: any | null = null;
+  try {
+    const { Database } = require("bun:sqlite");
+    db = new Database(dbPath, { readonly: true });
+
+    if (!tableExists(db, "_smithers_runs")) return null;
+
+    const runRow = db
+      .query("SELECT status FROM _smithers_runs WHERE run_id = ? LIMIT 1")
+      .get(runId) as { status?: string } | null;
+    if (!runRow) return null;
+
+    const hasNodesTable = tableExists(db, "_smithers_nodes");
+    const hasAttemptsTable = tableExists(db, "_smithers_attempts");
+
+    const failedNodeCount = hasNodesTable
+      ? Number(
+          (
+            db
+              .query(
+                "SELECT COUNT(*) AS count FROM _smithers_nodes WHERE run_id = ? AND state = 'failed'",
+              )
+              .get(runId) as { count?: number } | null
+          )?.count ?? 0,
+        )
+      : 0;
+    const failedAttemptCount = hasAttemptsTable
+      ? Number(
+          (
+            db
+              .query(
+                "SELECT COUNT(*) AS count FROM _smithers_attempts WHERE run_id = ? AND state = 'failed'",
+              )
+              .get(runId) as { count?: number } | null
+          )?.count ?? 0,
+        )
+      : 0;
+
+    const latestFailedAttempts = hasAttemptsTable
+      ? (db
+          .query(
+            `SELECT node_id, iteration, attempt, finished_at_ms, error_json
+               FROM _smithers_attempts
+              WHERE run_id = ? AND state = 'failed'
+              ORDER BY COALESCE(finished_at_ms, 0) DESC, node_id ASC, iteration DESC, attempt DESC
+              LIMIT ?`,
+          )
+          .all(runId, maxAttempts) as Array<{
+          node_id?: string;
+          iteration?: number;
+          attempt?: number;
+          finished_at_ms?: number | null;
+          error_json?: string | null;
+        }>)
+          .map((row) => ({
+            nodeId: String(row.node_id ?? "unknown-node"),
+            iteration: Number(row.iteration ?? 0),
+            attempt: Number(row.attempt ?? 0),
+            finishedAtMs:
+              row.finished_at_ms == null ? null : Number(row.finished_at_ms),
+            message: parseAttemptErrorMessage(row.error_json),
+          }))
+      : [];
+
+    return {
+      runId,
+      runStatus: runRow.status == null ? null : String(runRow.status),
+      failedNodeCount,
+      failedAttemptCount,
+      latestFailedAttempts,
+    };
+  } catch {
+    return null;
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      // ignore
+    }
   }
 }
 
@@ -288,6 +442,32 @@ async function emitResumeRecoveryEvent(opts: {
   });
 }
 
+async function emitResumeFailureSnapshotEvent(opts: {
+  appendEvent: typeof appendAgentixEvent;
+  agentixDir: string;
+  runId: string;
+  snapshot: ResumeFailureSnapshot | null;
+}): Promise<void> {
+  const { appendEvent, agentixDir, runId, snapshot } = opts;
+  if (!snapshot || snapshot.failedAttemptCount === 0) return;
+
+  await appendEvent(agentixDir, {
+    level: "info",
+    event: "run.resume.failure_snapshot",
+    command: "run",
+    runId,
+    details: {
+      runStatus: snapshot.runStatus,
+      failedNodeCount: snapshot.failedNodeCount,
+      failedAttemptCount: snapshot.failedAttemptCount,
+      latestFailedAttempts: snapshot.latestFailedAttempts.map((attempt) => ({
+        ...attempt,
+        message: truncateText(attempt.message, 500),
+      })),
+    },
+  });
+}
+
 function printResumeRecoverySummary(summary: ResumeRecoverySummary): void {
   if (!summary.enabled) {
     console.log("↺ Resume recovery disabled by --no-resume-recovery.\n");
@@ -311,6 +491,30 @@ function printResumeRecoverySummary(summary: ResumeRecoverySummary): void {
     );
     console.log();
   }
+}
+
+function printResumeFailureSnapshot(snapshot: ResumeFailureSnapshot | null): void {
+  if (!snapshot || snapshot.failedAttemptCount === 0) return;
+
+  console.log(
+    `↺ Resume context: prior run was ${snapshot.runStatus ?? "unknown"} with ${snapshot.failedNodeCount} failed node(s) and ${snapshot.failedAttemptCount} failed attempt(s).`,
+  );
+
+  if (snapshot.latestFailedAttempts.length > 0) {
+    console.log("  Latest failed attempts:");
+    for (const attempt of snapshot.latestFailedAttempts) {
+      const finishedAt =
+        attempt.finishedAtMs == null
+          ? "unknown-time"
+          : new Date(attempt.finishedAtMs).toISOString();
+      const message =
+        truncateText(attempt.message, 220) ?? "No error message recorded";
+      console.log(
+        `  - ${attempt.nodeId} [iteration ${attempt.iteration}, attempt ${attempt.attempt}] @ ${finishedAt}: ${message}`,
+      );
+    }
+  }
+  console.log();
 }
 
 export async function runWorkflow(opts: {
@@ -419,6 +623,14 @@ export async function runWorkflow(opts: {
       exit(1);
     }
 
+    // Keep generated workflow aligned with current runtime code so timeout and
+    // observability improvements apply to existing .agentix directories.
+    await writeFile(
+      workflowPath,
+      renderScheduledWorkflow({ repoRoot }),
+      "utf8",
+    );
+
     // ── Resume path ─────────────────────────────────────────────────────
     if (resumeRunId) {
       if (!existsSync(dbPath)) {
@@ -431,6 +643,18 @@ export async function runWorkflow(opts: {
         });
         exit(1);
       }
+
+      const resumeFailureSnapshot = await loadResumeFailureSnapshot({
+        dbPath,
+        runId: resumeRunId,
+      });
+      await emitResumeFailureSnapshotEvent({
+        appendEvent,
+        agentixDir,
+        runId: resumeRunId,
+        snapshot: resumeFailureSnapshot,
+      });
+      printResumeFailureSnapshot(resumeFailureSnapshot);
 
       const resumeRecovery = await maybeRecoverResumeRun({
         dbPath,
@@ -490,6 +714,17 @@ export async function runWorkflow(opts: {
 
       if (choice === 1 && latestRunId) {
         activeRunId = latestRunId;
+        const resumeFailureSnapshot = await loadResumeFailureSnapshot({
+          dbPath,
+          runId: latestRunId,
+        });
+        await emitResumeFailureSnapshotEvent({
+          appendEvent,
+          agentixDir,
+          runId: latestRunId,
+          snapshot: resumeFailureSnapshot,
+        });
+        printResumeFailureSnapshot(resumeFailureSnapshot);
         const resumeRecovery = await maybeRecoverResumeRun({
           dbPath,
           runId: latestRunId,

@@ -38,6 +38,7 @@ Fields:
 Resume resilience events:
 - `run.resume.recovered`: failed-node recovery preflight reopened exhausted failed nodes before `run --resume`
 - `run.resume.recovery_skipped`: resume recovery preflight did not mutate state (disabled/not needed/error)
+- `run.resume.failure_snapshot`: pre-recovery failure context (failed node/attempt counts + latest failed attempt messages)
 
 Reason enums should be emitted under `details.reason` when a deterministic reason is known.
 

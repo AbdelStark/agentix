@@ -60,6 +60,26 @@ const RESOURCE_SAMPLE_INTERVAL_MS = Math.max(
 );
 const RESOURCE_SAMPLES_PATH = join(_agentixDir, "resource-samples.jsonl");
 
+function parseOptionalTimeoutMs(raw: string | undefined): number | undefined {
+  if (raw == null) return undefined;
+  const normalized = raw.trim().toLowerCase();
+  if (!normalized) return undefined;
+  if (["0", "off", "false", "none", "disable", "disabled"].includes(normalized)) {
+    return undefined;
+  }
+  const parsed = Number(normalized);
+  if (!Number.isFinite(parsed) || parsed <= 0) return undefined;
+  return Math.floor(parsed);
+}
+
+const CLI_TIMEOUT_MS = parseOptionalTimeoutMs(process.env.AGENTIX_CLI_TIMEOUT_MS);
+const CLI_IDLE_TIMEOUT_MS = parseOptionalTimeoutMs(process.env.AGENTIX_CLI_IDLE_TIMEOUT_MS);
+const LOG_TIMEOUT_CONFIG = process.env.AGENTIX_DEBUG_TIMEOUTS === "1";
+
+function formatTimeout(value: number | undefined): string {
+  return value == null ? "disabled" : \`\${value}ms\`;
+}
+
 // ── Load work plan ────────────────────────────────────────────────────
 
 const workPlan = JSON.parse(readFileSync(PLAN_PATH, "utf8"));
@@ -90,7 +110,8 @@ function createClaude(role: string, model: string = "claude-sonnet-4-6") {
     systemPrompt: buildSystemPrompt(role),
     cwd: REPO_ROOT,
     dangerouslySkipPermissions: true,
-    timeoutMs: 60 * 60 * 1000,
+    timeoutMs: CLI_TIMEOUT_MS,
+    idleTimeoutMs: CLI_IDLE_TIMEOUT_MS,
     outputFormat: ENABLE_CLAUDE_TELEMETRY ? "stream-json" : "text",
     includePartialMessages: ENABLE_CLAUDE_TELEMETRY ? true : undefined,
   });
@@ -102,7 +123,8 @@ function createCodex(role: string) {
     systemPrompt: buildSystemPrompt(role),
     cwd: REPO_ROOT,
     yolo: true,
-    timeoutMs: 60 * 60 * 1000,
+    timeoutMs: CLI_TIMEOUT_MS,
+    idleTimeoutMs: CLI_IDLE_TIMEOUT_MS,
     json: ENABLE_CODEX_TELEMETRY ? true : undefined,
   });
 }
@@ -181,6 +203,12 @@ if (ENABLE_RESOURCE_SAMPLER) {
   setInterval(() => {
     sampleResourceEnvelope().catch(() => undefined);
   }, RESOURCE_SAMPLE_INTERVAL_MS);
+}
+
+if (LOG_TIMEOUT_CONFIG) {
+  console.log(
+    \`[agentix] CLI timeout config: total=\${formatTimeout(CLI_TIMEOUT_MS)} idle=\${formatTimeout(CLI_IDLE_TIMEOUT_MS)}\`,
+  );
 }
 
 // ── Smithers setup ────────────────────────────────────────────────────

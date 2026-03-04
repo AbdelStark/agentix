@@ -133,6 +133,8 @@ agentix run --resume sw-m3abc12-deadbeef
 
 By default, resume includes a recovery preflight for failed runs: it reopens failed nodes (while preserving a DB snapshot in `.agentix/recovery-backups/`) so work can continue instead of instantly re-failing.
 
+Before recovery, Agentix now prints a short failure snapshot (failed nodes/attempts + latest error messages) so timeout loops are easier to diagnose.
+
 ```bash
 # disable recovery preflight if needed
 agentix run --resume sw-m3abc12-deadbeef --no-resume-recovery
@@ -147,6 +149,26 @@ agentix run --resume sw-m3abc12-deadbeef --resume-force
 ```
 
 Equivalent explicit boolean form: `--resume-force true`.
+
+### CLI Timeout Controls
+
+Agent CLI timeouts in generated workflows are controlled by environment variables:
+
+- `AGENTIX_CLI_TIMEOUT_MS`: hard wall-clock timeout for each agent call
+- `AGENTIX_CLI_IDLE_TIMEOUT_MS`: inactivity timeout (used when supported by your Smithers version)
+
+Values `0`, `off`, `false`, `none`, `disable`, or `disabled` disable the timeout. By default, both are unset.
+
+```bash
+# no hard timeout, 10-minute idle timeout (requires Smithers idle-timeout support)
+AGENTIX_CLI_TIMEOUT_MS=0 AGENTIX_CLI_IDLE_TIMEOUT_MS=600000 agentix run --resume <run-id>
+```
+
+To print the effective timeout config at workflow start:
+
+```bash
+AGENTIX_DEBUG_TIMEOUTS=1 agentix run --resume <run-id>
+```
 
 ## How It Works
 

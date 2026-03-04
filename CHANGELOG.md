@@ -18,6 +18,8 @@ The format is based on Keep a Changelog and uses semantic versioning.
 - Analytics noise-control filter (`--exclude-command`) with deterministic command exclusion in summary/failure rollups.
 - Telemetry policy gate support for recurring non-zero `run` exits (`telemetry.runNonZeroExitHardGate`).
 - Expanded analytics fixture coverage for multi-day trend drift and schema v1/v2 compatibility edges.
+- Resume preflight failure snapshots (`run.resume.failure_snapshot`) with latest failed attempt messages to speed up timeout debugging.
+- Workflow timeout environment controls (`AGENTIX_CLI_TIMEOUT_MS`, `AGENTIX_CLI_IDLE_TIMEOUT_MS`, `AGENTIX_DEBUG_TIMEOUTS`) to avoid hardcoded 60m agent timeouts.
 
 ## [0.3.1] - 2026-03-03
 

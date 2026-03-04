@@ -48,6 +48,11 @@ Run Options:
   --resume-force <bool>       Pass --force to smithers resume (default: false)
   --no-resume-force           Disable forced smithers resume
 
+Environment:
+  AGENTIX_CLI_TIMEOUT_MS      Hard per-agent CLI timeout in ms (unset/0 disables)
+  AGENTIX_CLI_IDLE_TIMEOUT_MS Idle per-agent CLI timeout in ms (when supported)
+  AGENTIX_DEBUG_TIMEOUTS      Print resolved timeout config when set to 1
+
 Init Options:
   --dry-run                   Generate work plan but don't execute
 
