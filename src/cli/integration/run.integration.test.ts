@@ -132,6 +132,35 @@ describe("run command integration", () => {
     expect(completed.details?.mode).toBe("resume");
   });
 
+  test("passes force resume flag to smithers when --resume-force is enabled", async () => {
+    const repoRoot = await createTempRepo();
+    const rfcPath = await writeRfc(repoRoot);
+    await writeAgentixConfig(repoRoot, { rfcPath, maxConcurrency: 3 });
+    await writeAgentixWorkPlan(repoRoot);
+    await writeGeneratedWorkflow(repoRoot);
+    await writeWorkflowDbWithRuns(repoRoot, ["sw-force"]);
+
+    const launchStub = createLaunchStub([0]);
+
+    await runWorkflow({
+      flags: { resume: "sw-force", "resume-force": true },
+      repoRoot,
+      deps: {
+        findSmithersCliPath: () => "/tmp/fake-smithers.ts",
+        launchSmithers: launchStub.launch,
+      },
+    });
+
+    expect(launchStub.calls).toHaveLength(1);
+    expect(launchStub.calls[0]).toEqual(
+      expect.objectContaining({
+        mode: "resume",
+        runId: "sw-force",
+        forceResume: true,
+      }),
+    );
+  });
+
   test("fails resume when workflow DB is missing", async () => {
     const repoRoot = await createTempRepo();
     const rfcPath = await writeRfc(repoRoot);

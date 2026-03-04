@@ -67,6 +67,16 @@ function parseResumeRecoveryEnabled(flags: ParsedArgs["flags"]): boolean {
   return true;
 }
 
+function parseResumeForceEnabled(flags: ParsedArgs["flags"]): boolean {
+  const disableFlag = parseBooleanFlag(flags["no-resume-force"]);
+  if (disableFlag === true) return false;
+
+  const enableFlag = parseBooleanFlag(flags["resume-force"]);
+  if (enableFlag != null) return enableFlag;
+
+  return false;
+}
+
 type ResumeRecoverySummary = {
   enabled: boolean;
   attempted: boolean;
@@ -322,6 +332,7 @@ export async function runWorkflow(opts: {
   const configPath = join(agentixDir, "config.json");
   const startedAt = Date.now();
   const enableResumeRecovery = parseResumeRecoveryEnabled(flags);
+  const enableResumeForce = parseResumeForceEnabled(flags);
 
   const resumeRunId =
     typeof flags.resume === "string" ? flags.resume : null;
@@ -441,6 +452,7 @@ export async function runWorkflow(opts: {
         runId: resumeRunId,
         maxConcurrency,
         smithersCliPath,
+        forceResume: enableResumeForce,
         label: "Scheduled Work (resume)",
         launchSmithers,
       });
@@ -454,6 +466,7 @@ export async function runWorkflow(opts: {
           mode: "resume",
           exitCode,
           maxConcurrency,
+          forceResume: enableResumeForce,
           resumeRecovery,
         },
       });
@@ -496,6 +509,7 @@ export async function runWorkflow(opts: {
           runId: latestRunId,
           maxConcurrency,
           smithersCliPath,
+          forceResume: enableResumeForce,
           label: "Scheduled Work (resume)",
           launchSmithers,
         });
@@ -509,6 +523,7 @@ export async function runWorkflow(opts: {
             mode: "resume",
             exitCode,
             maxConcurrency,
+            forceResume: enableResumeForce,
             resumeRecovery,
           },
         });
@@ -614,6 +629,7 @@ async function launchAndReport(opts: {
   runId: string;
   maxConcurrency: number;
   smithersCliPath: string;
+  forceResume?: boolean;
   label: string;
   launchSmithers: LaunchAdapter;
 }): Promise<number> {

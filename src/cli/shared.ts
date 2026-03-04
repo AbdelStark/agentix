@@ -370,6 +370,7 @@ export async function launchSmithers(opts: {
   runId: string;
   maxConcurrency: number;
   smithersCliPath: string;
+  forceResume?: boolean;
 }): Promise<number> {
   const {
     mode,
@@ -378,6 +379,7 @@ export async function launchSmithers(opts: {
     runId,
     maxConcurrency,
     smithersCliPath,
+    forceResume = false,
   } = opts;
 
   let execCwd: string;
@@ -410,6 +412,9 @@ export async function launchSmithers(opts: {
     "--max-concurrency",
     String(maxConcurrency),
   ];
+  if (mode === "resume" && forceResume) {
+    args.push("--force");
+  }
 
   const env = {
     ...process.env,

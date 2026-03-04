@@ -289,6 +289,7 @@ export type LaunchCall = {
   runId: string;
   maxConcurrency: number;
   smithersCliPath: string;
+  forceResume?: boolean;
 };
 export type PromptCall = { message: string; options: string[] };
 export type MonitorLaunchCall = {

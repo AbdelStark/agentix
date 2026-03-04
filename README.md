@@ -140,6 +140,14 @@ agentix run --resume sw-m3abc12-deadbeef --no-resume-recovery
 
 Use `--resume-recovery false` as an explicit equivalent.
 
+If your Smithers CLI blocks resume because the run is still marked `running`, force resume explicitly:
+
+```bash
+agentix run --resume sw-m3abc12-deadbeef --resume-force
+```
+
+Equivalent explicit boolean form: `--resume-force true`.
+
 ## How It Works
 
 ### Quality Pipeline (per unit)

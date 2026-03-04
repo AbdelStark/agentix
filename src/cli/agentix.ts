@@ -28,6 +28,8 @@ Usage:
   agentix run --resume <run-id>            Resume a previous run
   agentix run --resume <run-id> --no-resume-recovery
                                             Resume without auto recovery preflight
+  agentix run --resume <run-id> --resume-force
+                                            Force resume when run is still marked running
   agentix monitor                          Attach TUI to running workflow
   agentix dashboard                        Launch local observability dashboard
   agentix status                           Show current state
@@ -43,6 +45,8 @@ Run Options:
   --resume <run-id>           Resume a previous run ID
   --resume-recovery <bool>    Enable failed-node recovery before resume (default: true)
   --no-resume-recovery        Disable failed-node recovery preflight
+  --resume-force <bool>       Pass --force to smithers resume (default: false)
+  --no-resume-force           Disable forced smithers resume
 
 Init Options:
   --dry-run                   Generate work plan but don't execute

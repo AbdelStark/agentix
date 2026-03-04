@@ -22,6 +22,7 @@ export type LaunchRequest = {
   runId: string;
   maxConcurrency: number;
   smithersCliPath: string;
+  forceResume?: boolean;
 };
 
 export type LaunchAdapter = (opts: LaunchRequest) => Promise<number>;
