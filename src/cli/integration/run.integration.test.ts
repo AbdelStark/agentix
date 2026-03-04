@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { Database } from "bun:sqlite";
 
 import { runWorkflow } from "../run";
 import {
@@ -15,6 +16,7 @@ import {
   writeGeneratedWorkflow,
   writeRfc,
   writeWorkflowDbWithRuns,
+  writeWorkflowDbWithFailedResumeNodes,
 } from "./fixtures";
 
 afterEach(async () => {
@@ -156,6 +158,93 @@ describe("run command integration", () => {
     expect(failed.command).toBe("run");
     expect(failed.details?.reason).toBe("missing-db-for-resume");
     expect(failed.details?.resumeRunId).toBe("sw-missing");
+  });
+
+  test("resume recovery reopens failed nodes before launch", async () => {
+    const repoRoot = await createTempRepo();
+    const rfcPath = await writeRfc(repoRoot);
+    await writeAgentixConfig(repoRoot, { rfcPath, maxConcurrency: 3 });
+    await writeAgentixWorkPlan(repoRoot);
+    await writeGeneratedWorkflow(repoRoot);
+    const dbPath = await writeWorkflowDbWithFailedResumeNodes(repoRoot, "sw-stuck");
+
+    const launchStub = createLaunchStub([0]);
+
+    await runWorkflow({
+      flags: { resume: "sw-stuck" },
+      repoRoot,
+      deps: {
+        findSmithersCliPath: () => "/tmp/fake-smithers.ts",
+        launchSmithers: launchStub.launch,
+      },
+    });
+
+    expect(launchStub.calls).toHaveLength(1);
+    expect(launchStub.calls[0]).toEqual(
+      expect.objectContaining({
+        mode: "resume",
+        runId: "sw-stuck",
+      }),
+    );
+
+    const db = new Database(dbPath, { readonly: true });
+    const node = db
+      .query(
+        "SELECT state FROM _smithers_nodes WHERE run_id = ? AND node_id = ? AND iteration = ?",
+      )
+      .get("sw-stuck", "stuck-unit:final-review", 4) as
+      | { state: string }
+      | null;
+    const attempts = db
+      .query(
+        "SELECT state FROM _smithers_attempts WHERE run_id = ? AND node_id = ? AND iteration = ? ORDER BY attempt",
+      )
+      .all("sw-stuck", "stuck-unit:final-review", 4) as Array<{ state: string }>;
+    db.close();
+
+    expect(node?.state).toBe("pending");
+    expect(attempts.map((attempt) => attempt.state)).toEqual([
+      "cancelled",
+      "cancelled",
+    ]);
+
+    const events = await readAgentixEvents(repoRoot);
+    const recovered = expectEvent(events, "run.resume.recovered");
+    expect(recovered.command).toBe("run");
+    expect(recovered.runId).toBe("sw-stuck");
+  });
+
+  test("resume recovery can be disabled with --no-resume-recovery", async () => {
+    const repoRoot = await createTempRepo();
+    const rfcPath = await writeRfc(repoRoot);
+    await writeAgentixConfig(repoRoot, { rfcPath, maxConcurrency: 3 });
+    await writeAgentixWorkPlan(repoRoot);
+    await writeGeneratedWorkflow(repoRoot);
+    const dbPath = await writeWorkflowDbWithFailedResumeNodes(repoRoot, "sw-stuck-disabled");
+
+    const launchStub = createLaunchStub([0]);
+
+    await runWorkflow({
+      flags: { resume: "sw-stuck-disabled", "no-resume-recovery": true },
+      repoRoot,
+      deps: {
+        findSmithersCliPath: () => "/tmp/fake-smithers.ts",
+        launchSmithers: launchStub.launch,
+      },
+    });
+
+    const db = new Database(dbPath, { readonly: true });
+    const attempts = db
+      .query(
+        "SELECT state FROM _smithers_attempts WHERE run_id = ? AND node_id = ? AND iteration = ? ORDER BY attempt",
+      )
+      .all("sw-stuck-disabled", "stuck-unit:final-review", 4) as Array<{ state: string }>;
+    db.close();
+
+    expect(attempts.map((attempt) => attempt.state)).toEqual([
+      "failed",
+      "failed",
+    ]);
   });
 
   test("exits with non-zero code when launcher fails", async () => {

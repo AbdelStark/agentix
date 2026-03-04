@@ -168,6 +168,99 @@ export async function writeWorkflowDbWithRuns(
   return dbPath;
 }
 
+export async function writeWorkflowDbWithFailedResumeNodes(
+  repoRoot: string,
+  runId: string,
+): Promise<string> {
+  const dbPath = agentixPath(repoRoot, "workflow.db");
+  await mkdir(agentixPath(repoRoot), { recursive: true });
+
+  const { Database } = await import("bun:sqlite");
+  const db = new Database(dbPath);
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS _smithers_runs (
+      run_id TEXT PRIMARY KEY,
+      status TEXT,
+      finished_at_ms INTEGER
+    );
+    CREATE TABLE IF NOT EXISTS _smithers_nodes (
+      run_id TEXT NOT NULL,
+      node_id TEXT NOT NULL,
+      iteration INTEGER NOT NULL,
+      state TEXT NOT NULL,
+      last_attempt INTEGER,
+      updated_at_ms INTEGER,
+      output_table TEXT,
+      label TEXT
+    );
+    CREATE TABLE IF NOT EXISTS _smithers_attempts (
+      run_id TEXT NOT NULL,
+      node_id TEXT NOT NULL,
+      iteration INTEGER NOT NULL,
+      attempt INTEGER NOT NULL,
+      state TEXT NOT NULL,
+      started_at_ms INTEGER,
+      finished_at_ms INTEGER,
+      error_json TEXT
+    );
+  `);
+
+  db.exec("DELETE FROM _smithers_runs");
+  db.exec("DELETE FROM _smithers_nodes");
+  db.exec("DELETE FROM _smithers_attempts");
+
+  db.prepare(
+    "INSERT INTO _smithers_runs (run_id, status, finished_at_ms) VALUES (?, ?, ?)",
+  ).run(runId, "failed", Date.now());
+
+  db.prepare(
+    `INSERT INTO _smithers_nodes
+      (run_id, node_id, iteration, state, last_attempt, updated_at_ms, output_table, label)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    runId,
+    "stuck-unit:final-review",
+    4,
+    "failed",
+    2,
+    Date.now(),
+    "final_review",
+    null,
+  );
+
+  db.prepare(
+    `INSERT INTO _smithers_attempts
+      (run_id, node_id, iteration, attempt, state, started_at_ms, finished_at_ms, error_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    runId,
+    "stuck-unit:final-review",
+    4,
+    1,
+    "failed",
+    Date.now() - 10_000,
+    Date.now() - 9_000,
+    JSON.stringify({ message: "CLI timed out after 300000ms" }),
+  );
+  db.prepare(
+    `INSERT INTO _smithers_attempts
+      (run_id, node_id, iteration, attempt, state, started_at_ms, finished_at_ms, error_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    runId,
+    "stuck-unit:final-review",
+    4,
+    2,
+    "failed",
+    Date.now() - 8_000,
+    Date.now() - 7_000,
+    JSON.stringify({ message: "CLI timed out after 300000ms" }),
+  );
+
+  db.close();
+  return dbPath;
+}
+
 export async function readJsonFile<T>(path: string): Promise<T> {
   return JSON.parse(await readFile(path, "utf8")) as T;
 }

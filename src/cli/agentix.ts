@@ -26,6 +26,8 @@ Usage:
   agentix plan                             (Re)generate work plan from RFC
   agentix run                              Execute the initialized workflow
   agentix run --resume <run-id>            Resume a previous run
+  agentix run --resume <run-id> --no-resume-recovery
+                                            Resume without auto recovery preflight
   agentix monitor                          Attach TUI to running workflow
   agentix dashboard                        Launch local observability dashboard
   agentix status                           Show current state
@@ -36,6 +38,11 @@ Global Options:
   --cwd <path>                Repo root (default: current directory)
   --max-concurrency <n>       Max parallel work units (default: 6)
   --help                      Show this help
+
+Run Options:
+  --resume <run-id>           Resume a previous run ID
+  --resume-recovery <bool>    Enable failed-node recovery before resume (default: true)
+  --no-resume-recovery        Disable failed-node recovery preflight
 
 Init Options:
   --dry-run                   Generate work plan but don't execute

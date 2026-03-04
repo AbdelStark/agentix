@@ -6,8 +6,8 @@
  */
 
 import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { copyFile, mkdir, readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { randomUUID } from "node:crypto";
 
 import {
@@ -46,6 +46,263 @@ class WorkflowExitError extends Error {
   }
 }
 
+function parseBooleanFlag(value: string | boolean | undefined): boolean | null {
+  if (value === true) return true;
+  if (value === false) return false;
+  if (typeof value !== "string") return null;
+
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return null;
+}
+
+function parseResumeRecoveryEnabled(flags: ParsedArgs["flags"]): boolean {
+  const disableFlag = parseBooleanFlag(flags["no-resume-recovery"]);
+  if (disableFlag === true) return false;
+
+  const enableFlag = parseBooleanFlag(flags["resume-recovery"]);
+  if (enableFlag != null) return enableFlag;
+
+  return true;
+}
+
+type ResumeRecoverySummary = {
+  enabled: boolean;
+  attempted: boolean;
+  recovered: boolean;
+  runExists: boolean;
+  runStatus: string | null;
+  recoveredNodes: number;
+  recoveredAttempts: number;
+  backupPath: string | null;
+  skippedReason: string | null;
+};
+
+function tableExists(db: any, tableName: string): boolean {
+  try {
+    const row = db
+      .query("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ? LIMIT 1")
+      .get(tableName) as Record<string, unknown> | null;
+    return !!row;
+  } catch {
+    return false;
+  }
+}
+
+async function createResumeRecoveryBackup(
+  dbPath: string,
+  runId: string,
+): Promise<string | null> {
+  const backupDir = join(dirname(dbPath), "recovery-backups");
+  const stamp = new Date().toISOString().replaceAll(":", "-").replaceAll(".", "-");
+  const base = join(backupDir, `${runId}-${stamp}`);
+  const dbBackupPath = `${base}.db`;
+
+  try {
+    await mkdir(backupDir, { recursive: true });
+    await copyFile(dbPath, dbBackupPath);
+    for (const suffix of ["-wal", "-shm"] as const) {
+      const source = `${dbPath}${suffix}`;
+      if (existsSync(source)) {
+        await copyFile(source, `${dbBackupPath}${suffix}`);
+      }
+    }
+    return dbBackupPath;
+  } catch {
+    return null;
+  }
+}
+
+async function maybeRecoverResumeRun(opts: {
+  dbPath: string;
+  runId: string;
+  enabled: boolean;
+}): Promise<ResumeRecoverySummary> {
+  const summary: ResumeRecoverySummary = {
+    enabled: opts.enabled,
+    attempted: false,
+    recovered: false,
+    runExists: false,
+    runStatus: null,
+    recoveredNodes: 0,
+    recoveredAttempts: 0,
+    backupPath: null,
+    skippedReason: null,
+  };
+
+  if (!opts.enabled) {
+    summary.skippedReason = "disabled-by-flag";
+    return summary;
+  }
+
+  if (!existsSync(opts.dbPath)) {
+    summary.skippedReason = "missing-db";
+    return summary;
+  }
+
+  let db: any | null = null;
+  let began = false;
+  try {
+    const { Database } = require("bun:sqlite");
+    db = new Database(opts.dbPath);
+    summary.attempted = true;
+
+    if (
+      !tableExists(db, "_smithers_runs") ||
+      !tableExists(db, "_smithers_nodes") ||
+      !tableExists(db, "_smithers_attempts")
+    ) {
+      summary.skippedReason = "missing-smithers-tables";
+      return summary;
+    }
+
+    const runRow = db
+      .query("SELECT status FROM _smithers_runs WHERE run_id = ? LIMIT 1")
+      .get(opts.runId) as { status?: string } | null;
+    if (!runRow) {
+      summary.skippedReason = "run-not-found";
+      return summary;
+    }
+
+    summary.runExists = true;
+    summary.runStatus = runRow.status == null ? null : String(runRow.status);
+    if (summary.runStatus !== "failed") {
+      summary.skippedReason = `run-status-${summary.runStatus ?? "unknown"}`;
+      return summary;
+    }
+
+    const failedNodes = db
+      .query(
+        `SELECT node_id, iteration
+         FROM _smithers_nodes
+         WHERE run_id = ? AND state = 'failed'
+         ORDER BY node_id ASC, iteration ASC`,
+      )
+      .all(opts.runId) as Array<{ node_id: string; iteration: number }>;
+
+    if (failedNodes.length === 0) {
+      summary.skippedReason = "no-failed-nodes";
+      return summary;
+    }
+
+    summary.backupPath = await createResumeRecoveryBackup(opts.dbPath, opts.runId);
+
+    db.exec("BEGIN IMMEDIATE");
+    began = true;
+
+    const now = Date.now();
+    for (const failedNode of failedNodes) {
+      const attemptsResult = db
+        .query(
+          `UPDATE _smithers_attempts
+             SET state = 'cancelled'
+           WHERE run_id = ?
+             AND node_id = ?
+             AND iteration = ?
+             AND state = 'failed'`,
+        )
+        .run(opts.runId, failedNode.node_id, failedNode.iteration) as
+        | { changes?: number }
+        | undefined;
+      const changedAttempts = Number(attemptsResult?.changes ?? 0);
+      if (changedAttempts > 0) {
+        summary.recoveredNodes += 1;
+      }
+      summary.recoveredAttempts += changedAttempts;
+
+      db.query(
+        `UPDATE _smithers_nodes
+            SET state = 'pending',
+                updated_at_ms = ?
+          WHERE run_id = ?
+            AND node_id = ?
+            AND iteration = ?
+            AND state = 'failed'`,
+      ).run(now, opts.runId, failedNode.node_id, failedNode.iteration);
+    }
+
+    if (summary.recoveredAttempts > 0) {
+      db.query(
+        `UPDATE _smithers_runs
+            SET finished_at_ms = NULL
+          WHERE run_id = ?`,
+      ).run(opts.runId);
+    }
+
+    db.exec("COMMIT");
+    began = false;
+
+    summary.recovered = summary.recoveredAttempts > 0;
+    if (!summary.recovered) {
+      summary.skippedReason = "failed-nodes-without-failed-attempts";
+    }
+    return summary;
+  } catch (error) {
+    if (db && began) {
+      try {
+        db.exec("ROLLBACK");
+      } catch {
+        // best-effort rollback
+      }
+    }
+    const message = error instanceof Error ? error.message : String(error);
+    summary.skippedReason = `recovery-error:${message}`;
+    return summary;
+  } finally {
+    try {
+      db?.close();
+    } catch {
+      // ignore
+    }
+  }
+}
+
+async function emitResumeRecoveryEvent(opts: {
+  appendEvent: typeof appendAgentixEvent;
+  agentixDir: string;
+  runId: string;
+  summary: ResumeRecoverySummary;
+}): Promise<void> {
+  const { appendEvent, agentixDir, runId, summary } = opts;
+  if (!summary.attempted && !summary.enabled) return;
+
+  await appendEvent(agentixDir, {
+    level: "info",
+    event: summary.recovered
+      ? "run.resume.recovered"
+      : "run.resume.recovery_skipped",
+    command: "run",
+    runId,
+    details: summary,
+  });
+}
+
+function printResumeRecoverySummary(summary: ResumeRecoverySummary): void {
+  if (!summary.enabled) {
+    console.log("↺ Resume recovery disabled by --no-resume-recovery.\n");
+    return;
+  }
+
+  if (summary.recovered) {
+    console.log(
+      `↺ Resume recovery reopened ${summary.recoveredNodes} node(s) and ${summary.recoveredAttempts} failed attempt(s).`,
+    );
+    if (summary.backupPath) {
+      console.log(`  Backup snapshot: ${summary.backupPath}`);
+    }
+    console.log();
+    return;
+  }
+
+  if (summary.runStatus === "failed" || summary.skippedReason?.startsWith("recovery-error:")) {
+    console.log(
+      `↺ Resume recovery skipped (${summary.skippedReason ?? "unknown"}).`,
+    );
+    console.log();
+  }
+}
+
 export async function runWorkflow(opts: {
   flags: ParsedArgs["flags"];
   repoRoot: string;
@@ -64,6 +321,7 @@ export async function runWorkflow(opts: {
   const agentixDir = getAgentixDir(repoRoot);
   const configPath = join(agentixDir, "config.json");
   const startedAt = Date.now();
+  const enableResumeRecovery = parseResumeRecoveryEnabled(flags);
 
   const resumeRunId =
     typeof flags.resume === "string" ? flags.resume : null;
@@ -163,6 +421,19 @@ export async function runWorkflow(opts: {
         exit(1);
       }
 
+      const resumeRecovery = await maybeRecoverResumeRun({
+        dbPath,
+        runId: resumeRunId,
+        enabled: enableResumeRecovery,
+      });
+      await emitResumeRecoveryEvent({
+        appendEvent,
+        agentixDir,
+        runId: resumeRunId,
+        summary: resumeRecovery,
+      });
+      printResumeRecoverySummary(resumeRecovery);
+
       const exitCode = await launchAndReport({
         mode: "resume",
         workflowPath,
@@ -183,6 +454,7 @@ export async function runWorkflow(opts: {
           mode: "resume",
           exitCode,
           maxConcurrency,
+          resumeRecovery,
         },
       });
       return;
@@ -205,6 +477,18 @@ export async function runWorkflow(opts: {
 
       if (choice === 1 && latestRunId) {
         activeRunId = latestRunId;
+        const resumeRecovery = await maybeRecoverResumeRun({
+          dbPath,
+          runId: latestRunId,
+          enabled: enableResumeRecovery,
+        });
+        await emitResumeRecoveryEvent({
+          appendEvent,
+          agentixDir,
+          runId: latestRunId,
+          summary: resumeRecovery,
+        });
+        printResumeRecoverySummary(resumeRecovery);
         const exitCode = await launchAndReport({
           mode: "resume",
           workflowPath,
@@ -225,6 +509,7 @@ export async function runWorkflow(opts: {
             mode: "resume",
             exitCode,
             maxConcurrency,
+            resumeRecovery,
           },
         });
         return;

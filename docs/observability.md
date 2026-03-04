@@ -35,6 +35,10 @@ Fields:
 - `unitId`: optional work-unit correlation ID
 - `details`: additional metadata for troubleshooting
 
+Resume resilience events:
+- `run.resume.recovered`: failed-node recovery preflight reopened exhausted failed nodes before `run --resume`
+- `run.resume.recovery_skipped`: resume recovery preflight did not mutate state (disabled/not needed/error)
+
 Reason enums should be emitted under `details.reason` when a deterministic reason is known.
 
 ## Telemetry Analytics

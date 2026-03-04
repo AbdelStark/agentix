@@ -131,7 +131,14 @@ Optional flags:
 agentix run --resume sw-m3abc12-deadbeef
 ```
 
-Picks up from exactly where a previous run stopped — partial implementations, in-progress reviews, everything is persisted in SQLite.
+By default, resume includes a recovery preflight for failed runs: it reopens failed nodes (while preserving a DB snapshot in `.agentix/recovery-backups/`) so work can continue instead of instantly re-failing.
+
+```bash
+# disable recovery preflight if needed
+agentix run --resume sw-m3abc12-deadbeef --no-resume-recovery
+```
+
+Use `--resume-recovery false` as an explicit equivalent.
 
 ## How It Works
 
@@ -199,6 +206,27 @@ evictionContext → implement (after merge conflict)
 
 For each merge-eligible unit, Agentix writes a deterministic trace artifact to:
 - `.agentix/generated/traces/<unit-id>.json`
+
+### Local Development Workflow (Testing Orchestrator Changes)
+
+If you're editing Agentix locally and want to test against another repo on the same machine, the fastest path is running the local CLI entry directly from source:
+
+```bash
+# inside target repo (for example /Users/abdel/dev/me/arcade_os/compiler)
+bun run /Users/abdel/dev/me/agentix/src/cli/agentix.ts run --resume <run-id>
+```
+
+This bypasses the published package and uses your in-progress local changes immediately.
+
+Alternative:
+
+```bash
+# from agentix repo
+bun link
+
+# from target repo
+bun link agentix
+```
 
 ### Merge Queue
 
