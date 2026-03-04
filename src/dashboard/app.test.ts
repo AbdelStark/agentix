@@ -40,6 +40,16 @@ describe("dashboard app routing", () => {
       attemptsAttemptFilter: 2,
       logStreamFilter: "stderr",
       logSearch: "timeout",
+      stepBoardFilter: "all",
+      stepBoardSort: "newest",
+      stepBoardQuery: "",
+      timelineCriticalOnly: false,
+      timelineFailuresOnly: false,
+      timelineSystemEvents: true,
+      timelineToolEvents: true,
+      timelineResourceAnomalies: false,
+      timelineQuery: "",
+      timelineFocusEventKey: null,
     });
 
     expect(readDashboardUrlState("?module=nope&attempt=bad&stream=all")).toEqual({
@@ -51,6 +61,16 @@ describe("dashboard app routing", () => {
       attemptsAttemptFilter: null,
       logStreamFilter: "all",
       logSearch: "",
+      stepBoardFilter: "all",
+      stepBoardSort: "newest",
+      stepBoardQuery: "",
+      timelineCriticalOnly: false,
+      timelineFailuresOnly: false,
+      timelineSystemEvents: true,
+      timelineToolEvents: true,
+      timelineResourceAnomalies: false,
+      timelineQuery: "",
+      timelineFocusEventKey: null,
     });
   });
 
@@ -66,11 +86,21 @@ describe("dashboard app routing", () => {
           attemptsAttemptFilter: 3,
           logStreamFilter: "stderr",
           logSearch: "stack",
+          stepBoardFilter: "failed",
+          stepBoardSort: "failing-first",
+          stepBoardQuery: "obs",
+          timelineCriticalOnly: true,
+          timelineFailuresOnly: true,
+          timelineSystemEvents: false,
+          timelineToolEvents: true,
+          timelineResourceAnomalies: true,
+          timelineQuery: "blocked",
+          timelineFocusEventKey: "evt-9",
         },
         "?token=secret-token",
       ),
     ).toBe(
-      "?token=secret-token&module=attempts&run=run-99&q=failed&unit=obs04&node=node.implement&attempt=3&stream=stderr&logs=stack",
+      "?token=secret-token&module=attempts&run=run-99&q=failed&unit=obs04&node=node.implement&attempt=3&stream=stderr&logs=stack&sfilter=failed&ssort=failing-first&squery=obs&tlc=1&tlf=1&tls=0&tlr=1&tlq=blocked&tle=evt-9",
     );
 
     expect(
@@ -84,6 +114,16 @@ describe("dashboard app routing", () => {
           attemptsAttemptFilter: null,
           logStreamFilter: "all",
           logSearch: "",
+          stepBoardFilter: "all",
+          stepBoardSort: "newest",
+          stepBoardQuery: "",
+          timelineCriticalOnly: false,
+          timelineFailuresOnly: false,
+          timelineSystemEvents: true,
+          timelineToolEvents: true,
+          timelineResourceAnomalies: false,
+          timelineQuery: "",
+          timelineFocusEventKey: null,
         },
         "?token=secret-token&module=dag",
       ),

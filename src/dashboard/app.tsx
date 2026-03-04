@@ -11,6 +11,16 @@ import { renderRiskPanel } from "./modules/risk/render.ts";
 import { renderTracePanel } from "./modules/trace/render.ts";
 import { renderAnalyticsPanel } from "./modules/analytics/render.ts";
 import { renderTelemetryCockpit } from "./modules/telemetry/render.ts";
+import {
+  deriveLatestNavigationTargets,
+  deriveRunPulseSummary,
+  deriveStepBoardRows,
+  deriveTimelineRows,
+  type StepBoardFilter,
+  type StepBoardSort,
+  type TimelineFilterState,
+} from "./modules/telemetry/selectors.ts";
+import { deriveDashboardLayoutState } from "./modules/layout/shell-state.ts";
 
 type ModuleId = "cockpit" | "dag" | "attempts" | "readiness" | "analytics" | "telemetry";
 
@@ -49,6 +59,16 @@ export type DashboardUrlState = {
   attemptsAttemptFilter: number | null;
   logStreamFilter: LogStreamFilter;
   logSearch: string;
+  stepBoardFilter: StepBoardFilter;
+  stepBoardSort: StepBoardSort;
+  stepBoardQuery: string;
+  timelineCriticalOnly: boolean;
+  timelineFailuresOnly: boolean;
+  timelineSystemEvents: boolean;
+  timelineToolEvents: boolean;
+  timelineResourceAnomalies: boolean;
+  timelineQuery: string;
+  timelineFocusEventKey: string | null;
 };
 
 function isModuleId(value: string): value is ModuleId {
@@ -78,6 +98,51 @@ function parseLogStreamFilter(value: string | null): LogStreamFilter {
   return "all";
 }
 
+function parseStepBoardFilter(value: string | null): StepBoardFilter {
+  if (
+    value === "all" ||
+    value === "in-progress" ||
+    value === "pending" ||
+    value === "failed" ||
+    value === "blocked" ||
+    value === "completed"
+  ) {
+    return value;
+  }
+  return "all";
+}
+
+function parseStepBoardSort(value: string | null): StepBoardSort {
+  if (
+    value === "newest" ||
+    value === "failing-first" ||
+    value === "pending-first" ||
+    value === "longest-running"
+  ) {
+    return value;
+  }
+  return "newest";
+}
+
+function parseBooleanQuery(value: string | null, fallback: boolean): boolean {
+  if (value == null) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (normalized === "1" || normalized === "true" || normalized === "yes") return true;
+  if (normalized === "0" || normalized === "false" || normalized === "no") return false;
+  return fallback;
+}
+
+function defaultTimelineFilters(): TimelineFilterState {
+  return {
+    criticalOnly: false,
+    failuresOnly: false,
+    systemEvents: true,
+    toolEvents: true,
+    resourceAnomalies: false,
+    query: "",
+  };
+}
+
 export function readDashboardUrlState(search: string): DashboardUrlState {
   const params = new URLSearchParams(search);
   const selectedModuleRaw = normalizeQueryValue(params.get("module"));
@@ -94,6 +159,16 @@ export function readDashboardUrlState(search: string): DashboardUrlState {
     attemptsAttemptFilter: parseAttemptNumber(params.get("attempt")),
     logStreamFilter: parseLogStreamFilter(params.get("stream")),
     logSearch: params.get("logs") ?? "",
+    stepBoardFilter: parseStepBoardFilter(params.get("sfilter")),
+    stepBoardSort: parseStepBoardSort(params.get("ssort")),
+    stepBoardQuery: params.get("squery") ?? "",
+    timelineCriticalOnly: parseBooleanQuery(params.get("tlc"), false),
+    timelineFailuresOnly: parseBooleanQuery(params.get("tlf"), false),
+    timelineSystemEvents: parseBooleanQuery(params.get("tls"), true),
+    timelineToolEvents: parseBooleanQuery(params.get("tlt"), true),
+    timelineResourceAnomalies: parseBooleanQuery(params.get("tlr"), false),
+    timelineQuery: params.get("tlq") ?? "",
+    timelineFocusEventKey: normalizeQueryValue(params.get("tle")),
   };
 }
 
@@ -112,6 +187,16 @@ export function buildDashboardSearch(
     "attempt",
     "stream",
     "logs",
+    "sfilter",
+    "ssort",
+    "squery",
+    "tlc",
+    "tlf",
+    "tls",
+    "tlt",
+    "tlr",
+    "tlq",
+    "tle",
   ]) {
     params.delete(key);
   }
@@ -139,6 +224,36 @@ export function buildDashboardSearch(
   }
   if (urlState.logSearch.trim()) {
     params.set("logs", urlState.logSearch.trim());
+  }
+  if (urlState.stepBoardFilter !== "all") {
+    params.set("sfilter", urlState.stepBoardFilter);
+  }
+  if (urlState.stepBoardSort !== "newest") {
+    params.set("ssort", urlState.stepBoardSort);
+  }
+  if (urlState.stepBoardQuery.trim()) {
+    params.set("squery", urlState.stepBoardQuery.trim());
+  }
+  if (urlState.timelineCriticalOnly) {
+    params.set("tlc", "1");
+  }
+  if (urlState.timelineFailuresOnly) {
+    params.set("tlf", "1");
+  }
+  if (!urlState.timelineSystemEvents) {
+    params.set("tls", "0");
+  }
+  if (!urlState.timelineToolEvents) {
+    params.set("tlt", "0");
+  }
+  if (urlState.timelineResourceAnomalies) {
+    params.set("tlr", "1");
+  }
+  if (urlState.timelineQuery.trim()) {
+    params.set("tlq", urlState.timelineQuery.trim());
+  }
+  if (urlState.timelineFocusEventKey) {
+    params.set("tle", urlState.timelineFocusEventKey);
   }
 
   const serialized = params.toString();
@@ -175,6 +290,11 @@ type AppState = {
   logSearch: string;
   attemptsNodeFilter: string | null;
   attemptsAttemptFilter: number | null;
+  stepBoardFilter: StepBoardFilter;
+  stepBoardSort: StepBoardSort;
+  stepBoardQuery: string;
+  timelineFilters: TimelineFilterState;
+  timelineFocusEventKey: string | null;
   logViewportHeightPx: number;
   logScrollTopPx: number;
   toolEvents: any[];
@@ -214,6 +334,11 @@ const state: AppState = {
   logSearch: "",
   attemptsNodeFilter: null,
   attemptsAttemptFilter: null,
+  stepBoardFilter: "all",
+  stepBoardSort: "newest",
+  stepBoardQuery: "",
+  timelineFilters: defaultTimelineFilters(),
+  timelineFocusEventKey: null,
   logViewportHeightPx: 420,
   logScrollTopPx: 0,
   toolEvents: [],
@@ -239,6 +364,16 @@ function getCurrentUrlState(): DashboardUrlState {
     attemptsAttemptFilter: state.attemptsAttemptFilter,
     logStreamFilter: state.logStreamFilter,
     logSearch: state.logSearch,
+    stepBoardFilter: state.stepBoardFilter,
+    stepBoardSort: state.stepBoardSort,
+    stepBoardQuery: state.stepBoardQuery,
+    timelineCriticalOnly: state.timelineFilters.criticalOnly,
+    timelineFailuresOnly: state.timelineFilters.failuresOnly,
+    timelineSystemEvents: state.timelineFilters.systemEvents,
+    timelineToolEvents: state.timelineFilters.toolEvents,
+    timelineResourceAnomalies: state.timelineFilters.resourceAnomalies,
+    timelineQuery: state.timelineFilters.query,
+    timelineFocusEventKey: state.timelineFocusEventKey,
   };
 }
 
@@ -263,6 +398,18 @@ function applyUrlState(urlState: DashboardUrlState) {
   state.selectedUnitId = urlState.selectedUnitId;
   state.logStreamFilter = urlState.logStreamFilter;
   state.logSearch = urlState.logSearch;
+  state.stepBoardFilter = urlState.stepBoardFilter;
+  state.stepBoardSort = urlState.stepBoardSort;
+  state.stepBoardQuery = urlState.stepBoardQuery;
+  state.timelineFilters = {
+    criticalOnly: urlState.timelineCriticalOnly,
+    failuresOnly: urlState.timelineFailuresOnly,
+    systemEvents: urlState.timelineSystemEvents,
+    toolEvents: urlState.timelineToolEvents,
+    resourceAnomalies: urlState.timelineResourceAnomalies,
+    query: urlState.timelineQuery,
+  };
+  state.timelineFocusEventKey = urlState.timelineFocusEventKey;
   setAttemptFocus(urlState.attemptsNodeFilter, urlState.attemptsAttemptFilter);
 }
 
@@ -393,6 +540,114 @@ function setAttemptFocus(nodeId: string | null, attempt: number | null) {
   state.attemptsAttemptFilter =
     Number.isFinite(attempt) && attempt != null ? Math.max(0, Math.floor(attempt)) : null;
   state.logScrollTopPx = 0;
+}
+
+function parseDatasetAttempt(value: string | null | undefined): number | null {
+  if (value == null) return null;
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return null;
+  return Math.max(0, Math.floor(parsed));
+}
+
+function buildStepRowsForOperations() {
+  return deriveStepBoardRows({
+    nodes: state.nodes,
+    executionSteps: state.executionSteps,
+    liveEvents: state.liveEvents,
+  });
+}
+
+function buildTimelineRowsForOperations(
+  overrides: Partial<TimelineFilterState> = {},
+) {
+  const timelineWindow = [
+    ...(state.liveEvents ?? []).slice(0, 240),
+    ...(state.timeline ?? []).slice(0, 1200),
+  ];
+  return deriveTimelineRows(
+    timelineWindow,
+    {
+      criticalOnly: false,
+      failuresOnly: false,
+      systemEvents: true,
+      toolEvents: true,
+      resourceAnomalies: false,
+      query: "",
+      ...overrides,
+    },
+  );
+}
+
+function jumpToAttemptsContext(
+  nodeId: string | null,
+  attempt: number | null,
+  mode: "push" | "replace" = "push",
+) {
+  if (!nodeId) return;
+  setAttemptFocus(nodeId, attempt);
+  state.selectedModule = "attempts";
+  syncUrlState(mode);
+  render();
+}
+
+function jumpToCriticalTimeline(mode: "push" | "replace" = "push") {
+  const timelineRows = buildTimelineRowsForOperations();
+  const critical = timelineRows.find((entry) => entry.critical) ?? null;
+  if (!critical) return;
+  state.selectedModule = "telemetry";
+  state.timelineFilters.criticalOnly = true;
+  state.timelineFilters.query = "";
+  state.timelineFocusEventKey = critical.eventKey;
+  syncUrlState(mode);
+  render();
+}
+
+function renderRunPulseStrip(): string {
+  const stepRows = buildStepRowsForOperations();
+  const timelineRows = buildTimelineRowsForOperations();
+  const pulse = deriveRunPulseSummary({
+    runStatus: state.runSummary?.run?.status ?? null,
+    stepRows,
+    timelineRows,
+  });
+  const latest = deriveLatestNavigationTargets(stepRows);
+  const latestStep = pulse.latestStep;
+  const latestStepLabel = latestStep
+    ? `${latestStep.unitId}/${latestStep.stage} #${latestStep.attempt}`
+    : "No step yet";
+  const lastCriticalLabel = pulse.lastCriticalEvent
+    ? `${pulse.lastCriticalEvent.eventType} • ${pulse.lastCriticalEvent.relativeTime}`
+    : "No critical event";
+
+  return `
+    <section class="glass-panel run-pulse-strip" aria-label="Run pulse summary">
+      <article class="pulse-card">
+        <p class="pulse-label">Run Status</p>
+        <p class="pulse-value">${escapeHtml(pulse.runStatus)}</p>
+        <p class="pulse-sub">${escapeHtml(latestStepLabel)}</p>
+      </article>
+      <article class="pulse-card">
+        <p class="pulse-label">Workload</p>
+        <p class="pulse-value">${pulse.inProgressCount} in-progress</p>
+        <p class="pulse-sub">${pulse.pendingCount} pending • ${pulse.completedCount} completed</p>
+      </article>
+      <article class="pulse-card">
+        <p class="pulse-label">Risks</p>
+        <p class="pulse-value">${pulse.failedCount} failed</p>
+        <p class="pulse-sub">${pulse.blockedCount} blocked</p>
+      </article>
+      <article class="pulse-card pulse-card-wide">
+        <p class="pulse-label">Last Critical Event</p>
+        <p class="pulse-value">${escapeHtml(lastCriticalLabel)}</p>
+        <div class="pulse-actions">
+          <button type="button" class="lucid-button lucid-button-xs" data-pulse-jump="failed" ${latest.latestFailed ? "" : "disabled"}>Latest Failed Step</button>
+          <button type="button" class="lucid-button lucid-button-xs" data-pulse-jump="pending" ${latest.latestPending ? "" : "disabled"}>Latest Pending Step</button>
+          <button type="button" class="lucid-button lucid-button-xs" data-pulse-jump="in-progress" ${latest.latestInProgress ? "" : "disabled"}>Latest In-Progress Step</button>
+          <button type="button" class="lucid-button lucid-button-xs" data-pulse-jump="critical" ${pulse.lastCriticalEvent ? "" : "disabled"}>Latest Critical Event</button>
+        </div>
+      </article>
+    </section>
+  `;
 }
 
 async function refreshRunScopedData(runId: string) {
@@ -660,12 +915,21 @@ function renderModuleContent(): string {
 
 function renderTelemetryPanel(): string {
   return renderTelemetryCockpit({
+    runStatus: state.runSummary?.run?.status ?? null,
+    nodes: state.nodes,
     toolEvents: state.toolEvents,
     resources: state.resources,
     prompts: state.prompts,
     executionSteps: state.executionSteps,
     timeline: state.timeline,
     liveEvents: state.liveEvents,
+    stepBoardFilter: {
+      state: state.stepBoardFilter,
+      query: state.stepBoardQuery,
+    },
+    stepBoardSort: state.stepBoardSort,
+    timelineFilters: state.timelineFilters,
+    timelineFocusEventKey: state.timelineFocusEventKey,
   });
 }
 
@@ -735,6 +999,14 @@ function renderHeaderOnly() {
       : "Live stream disconnected.";
     announcedLiveState = state.sseConnected;
   }
+  renderPulseOnly();
+}
+
+function renderPulseOnly() {
+  const pulseRoot = document.getElementById("run-pulse-root");
+  if (!pulseRoot) return;
+  pulseRoot.innerHTML = renderRunPulseStrip();
+  bindPulseEvents();
 }
 
 function renderModuleOnly() {
@@ -747,6 +1019,9 @@ function renderModuleOnly() {
 function render() {
   const root = document.getElementById("app-root");
   if (!root) return;
+  const layoutState = deriveDashboardLayoutState(
+    typeof window !== "undefined" ? window.innerWidth : 1280,
+  );
 
   const moduleTabs = MODULES.map(
     (module) => `
@@ -768,8 +1043,8 @@ function render() {
 
   root.innerHTML = `
     <div class="bg-mesh"></div>
-    <div class="dashboard-shell">
-      <aside class="glass-panel sidebar">
+    <div class="dashboard-shell" data-layout-mode="${layoutState.mode}" data-content-scroll="${layoutState.contentScrollMode}">
+      <aside class="glass-panel sidebar" data-sidebar-mode="${layoutState.sidebarSticky ? "sticky" : "flow"}">
         <header>
           <h1>Agentix</h1>
           <p class="muted">Observability Dashboard</p>
@@ -811,6 +1086,8 @@ function render() {
           </div>
         </header>
 
+        <section id="run-pulse-root">${renderRunPulseStrip()}</section>
+
         <nav class="glass-panel module-nav" role="tablist" aria-label="Dashboard modules">${moduleTabs}</nav>
 
         <section
@@ -831,11 +1108,37 @@ function render() {
 
   bindGlobalEvents();
   bindModuleEvents();
+  bindPulseEvents();
   if (state.paletteOpen) {
     window.requestAnimationFrame(() => {
       focusPaletteFirstAction();
     });
   }
+}
+
+function bindPulseEvents() {
+  document.querySelectorAll<HTMLButtonElement>("[data-pulse-jump]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.pulseJump;
+      if (!target) return;
+      if (target === "critical") {
+        jumpToCriticalTimeline("push");
+        return;
+      }
+      const rows = buildStepRowsForOperations();
+      const latest = deriveLatestNavigationTargets(rows);
+      const step =
+        target === "failed"
+          ? latest.latestFailed
+          : target === "pending"
+            ? latest.latestPending
+            : target === "in-progress"
+              ? latest.latestInProgress
+              : null;
+      if (!step) return;
+      jumpToAttemptsContext(step.nodeId, step.attempt > 0 ? step.attempt : null, "push");
+    });
+  });
 }
 
 function bindGlobalEvents() {
@@ -1035,6 +1338,155 @@ function bindModuleEvents() {
       renderModuleOnly();
     });
   });
+
+  document.querySelectorAll<HTMLButtonElement>("[data-step-filter]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const next = button.dataset.stepFilter;
+      if (
+        next !== "all" &&
+        next !== "in-progress" &&
+        next !== "pending" &&
+        next !== "failed" &&
+        next !== "blocked" &&
+        next !== "completed"
+      ) {
+        return;
+      }
+      state.stepBoardFilter = next;
+      syncUrlState("replace");
+      renderModuleOnly();
+    });
+  });
+
+  const stepBoardSearch = document.getElementById("step-board-search") as HTMLInputElement | null;
+  if (stepBoardSearch) {
+    stepBoardSearch.addEventListener("input", () => {
+      state.stepBoardQuery = stepBoardSearch.value;
+      syncUrlState("replace");
+      renderModuleOnly();
+    });
+  }
+
+  const stepBoardSort = document.getElementById("step-board-sort") as HTMLSelectElement | null;
+  if (stepBoardSort) {
+    stepBoardSort.addEventListener("change", () => {
+      const value = stepBoardSort.value;
+      if (
+        value !== "newest" &&
+        value !== "failing-first" &&
+        value !== "pending-first" &&
+        value !== "longest-running"
+      ) {
+        return;
+      }
+      state.stepBoardSort = value;
+      syncUrlState("replace");
+      renderModuleOnly();
+    });
+  }
+
+  document.querySelectorAll<HTMLButtonElement>("[data-step-jump]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.stepJump;
+      const nodeId = button.dataset.jumpNode ?? null;
+      const attempt = parseDatasetAttempt(button.dataset.jumpAttempt);
+      if (!action || !nodeId) return;
+      if (action === "timeline") {
+        state.selectedModule = "telemetry";
+        state.timelineFilters.query = nodeId;
+        state.timelineFocusEventKey = null;
+        syncUrlState("push");
+        render();
+        return;
+      }
+      jumpToAttemptsContext(nodeId, attempt, "push");
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>("[data-jump-latest]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const target = button.dataset.jumpLatest;
+      if (!target) return;
+      const rows = buildStepRowsForOperations();
+      const latest = deriveLatestNavigationTargets(rows);
+      const step =
+        target === "failed"
+          ? latest.latestFailed
+          : target === "pending"
+            ? latest.latestPending
+            : target === "in-progress"
+              ? latest.latestInProgress
+              : null;
+      if (!step) return;
+      jumpToAttemptsContext(step.nodeId, step.attempt > 0 ? step.attempt : null, "push");
+    });
+  });
+
+  document.querySelectorAll<HTMLButtonElement>("[data-jump-critical]").forEach((button) => {
+    button.addEventListener("click", () => {
+      jumpToCriticalTimeline("push");
+    });
+  });
+
+  const timelineCritical = document.getElementById("timeline-filter-critical") as HTMLInputElement | null;
+  if (timelineCritical) {
+    timelineCritical.addEventListener("change", () => {
+      state.timelineFilters.criticalOnly = timelineCritical.checked;
+      state.timelineFocusEventKey = null;
+      syncUrlState("replace");
+      renderModuleOnly();
+    });
+  }
+
+  const timelineFailures = document.getElementById("timeline-filter-failures") as HTMLInputElement | null;
+  if (timelineFailures) {
+    timelineFailures.addEventListener("change", () => {
+      state.timelineFilters.failuresOnly = timelineFailures.checked;
+      state.timelineFocusEventKey = null;
+      syncUrlState("replace");
+      renderModuleOnly();
+    });
+  }
+
+  const timelineSystem = document.getElementById("timeline-filter-system") as HTMLInputElement | null;
+  if (timelineSystem) {
+    timelineSystem.addEventListener("change", () => {
+      state.timelineFilters.systemEvents = timelineSystem.checked;
+      state.timelineFocusEventKey = null;
+      syncUrlState("replace");
+      renderModuleOnly();
+    });
+  }
+
+  const timelineTool = document.getElementById("timeline-filter-tool") as HTMLInputElement | null;
+  if (timelineTool) {
+    timelineTool.addEventListener("change", () => {
+      state.timelineFilters.toolEvents = timelineTool.checked;
+      state.timelineFocusEventKey = null;
+      syncUrlState("replace");
+      renderModuleOnly();
+    });
+  }
+
+  const timelineResourceAnomalies = document.getElementById("timeline-filter-resource-anomalies") as HTMLInputElement | null;
+  if (timelineResourceAnomalies) {
+    timelineResourceAnomalies.addEventListener("change", () => {
+      state.timelineFilters.resourceAnomalies = timelineResourceAnomalies.checked;
+      state.timelineFocusEventKey = null;
+      syncUrlState("replace");
+      renderModuleOnly();
+    });
+  }
+
+  const timelineSearch = document.getElementById("timeline-search") as HTMLInputElement | null;
+  if (timelineSearch) {
+    timelineSearch.addEventListener("input", () => {
+      state.timelineFilters.query = timelineSearch.value;
+      state.timelineFocusEventKey = null;
+      syncUrlState("replace");
+      renderModuleOnly();
+    });
+  }
 
   const tier = document.getElementById("dag-filter-tier") as HTMLSelectElement | null;
   if (tier) {

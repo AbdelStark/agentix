@@ -3,8 +3,17 @@ import { describe, expect, test } from "bun:test";
 import { renderTelemetryCockpit } from "./render";
 
 describe("telemetry cockpit rendering", () => {
-  test("renders summary, step, prompt, and timeline panels with populated data", () => {
+  test("renders operator pulse, step board, and prioritized timeline with populated data", () => {
     const html = renderTelemetryCockpit({
+      runStatus: "running",
+      nodes: [
+        {
+          nodeId: "obs13:implement",
+          state: "in-progress",
+          lastAttempt: 1,
+          updatedAt: "2026-03-04T10:00:03.000Z",
+        },
+      ],
       toolEvents: [
         {
           provider: "codex",
@@ -62,28 +71,57 @@ describe("telemetry cockpit rendering", () => {
           timestamp: "2026-03-04T10:00:04.000Z",
         },
       ],
+      stepBoardFilter: { state: "all", query: "" },
+      stepBoardSort: "newest",
+      timelineFilters: {
+        criticalOnly: false,
+        failuresOnly: false,
+        systemEvents: true,
+        toolEvents: true,
+        resourceAnomalies: false,
+        query: "",
+      },
+      timelineFocusEventKey: null,
     });
 
-    expect(html).toContain("Telemetry Health");
-    expect(html).toContain("Execution Steps");
+    expect(html).toContain("Step Status Board");
+    expect(html).toContain("Latest Failed Step");
+    expect(html).toContain("Quick jump");
     expect(html).toContain("Prompt Audit");
-    expect(html).toContain("Unified Timeline");
+    expect(html).toContain("Critical-First Timeline");
+    expect(html).toContain("critical only");
+    expect(html).toContain("system events");
     expect(html).toContain("functions.exec_command");
     expect(html).toContain("obs13:implement");
+    expect(html).toContain("data-step-jump");
   });
 
   test("renders empty-state diagnostics when telemetry sources are missing", () => {
     const html = renderTelemetryCockpit({
+      runStatus: null,
+      nodes: [],
       toolEvents: [],
       resources: [],
       prompts: [],
       executionSteps: [],
       timeline: [],
       liveEvents: [],
+      stepBoardFilter: { state: "all", query: "" },
+      stepBoardSort: "newest",
+      timelineFilters: {
+        criticalOnly: false,
+        failuresOnly: false,
+        systemEvents: true,
+        toolEvents: true,
+        resourceAnomalies: false,
+        query: "",
+      },
+      timelineFocusEventKey: null,
     });
 
-    expect(html).toContain("No execution-step telemetry yet");
+    expect(html).toContain("No step data for this run yet");
+    expect(html).toContain("No timeline events for current filters");
     expect(html).toContain("No prompt audit records yet");
-    expect(html).toContain("No timeline telemetry yet");
+    expect(html).toContain("No telemetry events yet");
   });
 });
