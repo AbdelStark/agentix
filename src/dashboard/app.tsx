@@ -55,6 +55,10 @@ function isModuleId(value: string): value is ModuleId {
   return MODULES.some((module) => module.id === value);
 }
 
+function isSyntheticDashboardRunId(runId: unknown): boolean {
+  return String(runId ?? "").trim().toLowerCase() === "sw-dashboard-demo";
+}
+
 function normalizeQueryValue(value: string | null): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim();
@@ -507,6 +511,7 @@ function connectLiveStream() {
 function renderSidebarRuns(): string {
   const query = state.runSearch.trim().toLowerCase();
   const runs = state.runs.filter((run) => {
+    if (isSyntheticDashboardRunId(run.runId)) return false;
     if (!query) return true;
     return (
       String(run.runId ?? "").toLowerCase().includes(query) ||
@@ -1154,7 +1159,7 @@ async function boot() {
       dashboardApi.workPlan(),
     ]);
 
-    state.runs = runs.items ?? [];
+    state.runs = (runs.items ?? []).filter((run) => !isSyntheticDashboardRunId(run.runId));
     state.traces = traces.items ?? [];
     state.analyticsSnapshots = analytics.items ?? [];
     state.commands = commands.items ?? [];

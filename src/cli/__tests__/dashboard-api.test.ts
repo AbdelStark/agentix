@@ -101,6 +101,21 @@ async function seedApiFixture(repoRoot: string): Promise<void> {
   );
 
   db.prepare(
+    `INSERT INTO _smithers_runs (run_id, workflow_name, workflow_path, status, created_at_ms, started_at_ms, finished_at_ms, error_json, config_json)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(
+    "sw-dashboard-demo",
+    "scheduled-work",
+    ".agentix/generated/workflow.tsx",
+    "running",
+    1_900_000_000_000,
+    1_900_000_000_050,
+    null,
+    null,
+    "{}",
+  );
+
+  db.prepare(
     `INSERT INTO _smithers_attempts (run_id, node_id, iteration, attempt, state, started_at_ms, finished_at_ms, error_json, jj_pointer, response_text, jj_cwd, cached, meta_json)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(
@@ -364,6 +379,29 @@ describe("dashboard API", () => {
         "smithers",
       ]);
       expect(payload.items[0]?.category).toBe("resource");
+    } finally {
+      await server.stop();
+    }
+  });
+
+  test("synthetic demo run routes are excluded from dashboard API", async () => {
+    const repoRoot = await createTempRepo();
+    await seedApiFixture(repoRoot);
+
+    const server = await startServer(repoRoot);
+    try {
+      const details = await fetch(`${server.baseUrl}/api/runs/sw-dashboard-demo`);
+      expect(details.status).toBe(404);
+
+      const nodes = await fetch(
+        `${server.baseUrl}/api/runs/sw-dashboard-demo/nodes?limit=20&offset=0`,
+      );
+      expect(nodes.status).toBe(404);
+
+      const stream = await fetch(
+        `${server.baseUrl}/api/stream?runId=sw-dashboard-demo&afterSeq=0`,
+      );
+      expect(stream.status).toBe(404);
     } finally {
       await server.stop();
     }

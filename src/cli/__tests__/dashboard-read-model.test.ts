@@ -105,6 +105,21 @@ describe("dashboard read model", () => {
       "{}",
     );
 
+    db.prepare(
+      `INSERT INTO _smithers_runs (run_id, workflow_name, workflow_path, status, created_at_ms, started_at_ms, finished_at_ms, error_json, config_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      "sw-dashboard-demo",
+      "scheduled-work",
+      ".agentix/generated/workflow.tsx",
+      "running",
+      1_900_000_000_000,
+      1_900_000_000_010,
+      null,
+      null,
+      "{}",
+    );
+
     db.close();
 
     const model = createDashboardReadModel({ repoRoot });

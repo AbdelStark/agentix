@@ -57,6 +57,13 @@ const STAGE_OUTPUT_TABLES = [
   "merge_queue",
 ] as const;
 
+const SYNTHETIC_DASHBOARD_RUN_IDS = new Set(["sw-dashboard-demo"]);
+
+function isSyntheticDashboardRunId(runId: string): boolean {
+  const normalized = String(runId ?? "").trim().toLowerCase();
+  return SYNTHETIC_DASHBOARD_RUN_IDS.has(normalized);
+}
+
 type ReadModelOpts = {
   repoRoot: string;
 };
@@ -470,6 +477,7 @@ export class DashboardReadModel {
   ): DashboardListResponse<DashboardRunSnapshot> {
     const warnings: string[] = [];
     const pagination = toPagination(inputPagination);
+    const syntheticRunId = "sw-dashboard-demo";
 
     return this.withDb(
       warnings,
@@ -480,8 +488,8 @@ export class DashboardReadModel {
         }
 
         const totalRow = db
-          .query("SELECT COUNT(*) AS total FROM _smithers_runs")
-          .get() as { total: number };
+          .query("SELECT COUNT(*) AS total FROM _smithers_runs WHERE run_id <> ?")
+          .get(syntheticRunId) as { total: number };
         const total = Number(totalRow?.total ?? 0);
 
         const rows = db
@@ -497,10 +505,13 @@ export class DashboardReadModel {
                error_json,
                config_json
              FROM _smithers_runs
+             WHERE run_id <> ?
              ORDER BY created_at_ms DESC, run_id DESC
              LIMIT ? OFFSET ?`,
           )
-          .all(pagination.limit, pagination.offset) as Array<Record<string, unknown>>;
+          .all(syntheticRunId, pagination.limit, pagination.offset) as Array<
+          Record<string, unknown>
+        >;
 
         const items = rows.map((row) => {
           const createdAtMs = safeNumber(row.created_at_ms) ?? 0;
@@ -532,6 +543,7 @@ export class DashboardReadModel {
 
   getRun(runId: string): DashboardRunSnapshot | null {
     const warnings: string[] = [];
+    if (isSyntheticDashboardRunId(runId)) return null;
 
     return this.withDb(
       warnings,

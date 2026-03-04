@@ -104,6 +104,10 @@ function parseRunRoute(pathname: string): {
   };
 }
 
+function isSyntheticDashboardRunId(runId: string): boolean {
+  return String(runId ?? "").trim().toLowerCase() === "sw-dashboard-demo";
+}
+
 async function maybeReadDashboardAsset(pathname: string): Promise<Response | null> {
   const cleaned =
     pathname === "/" || pathname === "/dashboard"
@@ -303,6 +307,9 @@ export async function startDashboardApiServer(
       if (pathname === "/api/stream") {
         const afterSeq = parseOptionalNumber(url.searchParams.get("afterSeq"));
         const runId = url.searchParams.get("runId");
+        if (runId && isSyntheticDashboardRunId(runId)) {
+          return jsonResponse({ error: "Not Found" }, 404);
+        }
         const encoder = new TextEncoder();
 
         const replay = stream.getReplay({
@@ -345,6 +352,9 @@ export async function startDashboardApiServer(
       if (runRoute) {
         const pagination = parsePagination(url);
         const { runId, resource } = runRoute;
+        if (isSyntheticDashboardRunId(runId)) {
+          return jsonResponse({ error: `Run ${runId} not found` }, 404);
+        }
 
         if (!resource) {
           const run = readModel.getRun(runId);
