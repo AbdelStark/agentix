@@ -220,8 +220,8 @@ For each merge-eligible unit, Agentix writes a deterministic trace artifact to:
 If you're editing Agentix locally and want to test against another repo on the same machine, the fastest path is running the local CLI entry directly from source:
 
 ```bash
-# inside target repo (for example /Users/abdel/dev/me/arcade_os/compiler)
-bun run /Users/abdel/dev/me/agentix/src/cli/agentix.ts run --resume <run-id>
+# inside target repo
+bun run /path/to/agentix/src/cli/agentix.ts run --resume <run-id>
 ```
 
 This bypasses the published package and uses your in-progress local changes immediately.
